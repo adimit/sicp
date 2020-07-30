@@ -17,13 +17,15 @@ enum EvaluationResult {
 }
 
 enum Expression {
-    String(String)
+    String(String),
+    Int(i64),
 }
 
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Expression::String(s) => { write!(f, "{}", s)?; }
+            Expression::Int(i) => { write!(f, "{}", i)?; }
         }
         Ok(())
     }
