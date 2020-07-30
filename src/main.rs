@@ -45,10 +45,11 @@ impl From<io::Error> for ReplError {
 
 enum Token {
     Number(i64),
+    Symbol(String)
 }
 
 enum Input {
-    Line(String),
+    Tokens(Vec<Token>),
     EOF,
 }
 
@@ -80,24 +81,35 @@ impl fmt::Display for Expression {
     }
 }
 
+fn tokenise(string: &str) -> Result<Vec<Token>, ReplError> {
+    Ok(Vec::new())
+}
+
 fn read() -> Result<Input, ReplError> {
     print!("λ> ");
     stdout().flush()?;
 
     let mut input = String::new();
-    let line = io::stdin().read_line(&mut input)?;
+    let bytes_read = io::stdin().read_line(&mut input)?;
 
-    Ok(match line {
-        0 => Input::EOF,
-        _ => Input::Line(String::from(input.strip_suffix("\n").unwrap_or(&input))),
-    })
+    if bytes_read == 0 {return Ok(Input::EOF)};
+    let tokens = tokenise(input.strip_suffix("\n").unwrap_or(&input))?;
+
+    Ok(Input::Tokens(tokens))
+}
+
+fn evaluate_tokens(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
+    tokens.get(0).map(|token| { match token {
+        Token::Number(num) => { EvaluationResult::Expression(Expression::Int(*num))}
+        Token::Symbol(sym) => { EvaluationResult::Expression(Expression::String(sym.clone()))}
+    }}).map_or(Err(ReplError::EvaluationError(String::from("No tokens to evaluate"))), |result| { Ok(result) } )
 }
 
 fn eval(input: Input) -> Result<EvaluationResult, ReplError> {
-    Ok(match input {
-        Input::Line(string) => EvaluationResult::Expression(Expression::String(string)),
-        Input::EOF => EvaluationResult::Command(Command::Quit),
-    })
+    match input {
+        Input::Tokens(tokens) => evaluate_tokens(tokens),
+        Input::EOF => Ok(EvaluationResult::Command(Command::Quit)),
+    }
 }
 
 fn repl() -> Result<EvaluationResult, ReplError> {
