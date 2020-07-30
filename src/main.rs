@@ -1,16 +1,3 @@
-// steps:
-// read input (possible failure)
-// tokenise (possible lexing failure)
-// parse (possible parsing failure, e.g. unbalanced parens)
-// optimise?
-// evaluate (possible evaluation failure, e.g. no definition)
-// print
-
-// tasks:
-// - wrap all return types in result type where needed
-// - decide which errors get thrown where
-// - add error handling in print
-
 use std::fmt;
 use std::io;
 use std::{
