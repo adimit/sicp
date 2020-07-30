@@ -85,7 +85,16 @@ impl fmt::Display for Expression {
 }
 
 fn tokenise(string: &str) -> Result<Vec<Token>, ReplError> {
-    Ok(Vec::new())
+    Ok(string
+        .split(" ")
+        .map(|token| {
+            token
+                .parse::<i64>()
+                .map_or(Token::Symbol(String::from(token)), |number| {
+                    Token::Number(number)
+                })
+        })
+        .collect())
 }
 
 fn read() -> Result<Input, ReplError> {
