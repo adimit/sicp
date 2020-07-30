@@ -39,19 +39,22 @@ enum Token {
 }
 
 enum Input {
-    Tokens(Vec<Token>),
+    Line(String),
     EOF,
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum Command {
     Quit,
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum EvaluationResult {
     Expression(Expression),
     Command(Command),
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum Expression {
     String(String),
     Int(i64),
@@ -94,9 +97,10 @@ fn read() -> Result<Input, ReplError> {
     if bytes_read == 0 {
         return Ok(Input::EOF);
     };
-    let tokens = tokenise(input.strip_suffix("\n").unwrap_or(&input))?;
 
-    Ok(Input::Tokens(tokens))
+    Ok(Input::Line(String::from(
+        input.strip_suffix("\n").unwrap_or(&input),
+    )))
 }
 
 fn evaluate_tokens(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
@@ -116,7 +120,10 @@ fn evaluate_tokens(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
 
 fn eval(input: Input) -> Result<EvaluationResult, ReplError> {
     match input {
-        Input::Tokens(tokens) => evaluate_tokens(tokens),
+        Input::Line(string) => {
+            let tokens = tokenise(&string)?;
+            evaluate_tokens(tokens)
+        }
         Input::EOF => Ok(EvaluationResult::Command(Command::Quit)),
     }
 }
@@ -146,5 +153,18 @@ fn main() {
                 println!("Encountered an error:\n{}", e);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evaluates_simple_expressions() {
+        assert_eq!(
+            eval(Input::Line(String::from("123"))).unwrap(),
+            EvaluationResult::Expression(Expression::Int(123))
+        )
     }
 }
