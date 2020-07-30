@@ -29,9 +29,9 @@ impl fmt::Display for ReplError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ReplError::IOError(e) => { write!(f, "REPL IO error: {}", e)? }
-            ReplError::TokenisationError(msg) => { write!(f, "REPL Tokenisation error: {}", msg)? }
-            ReplError::ParsingError(msg) => { write!(f, "RERPL Parsing error: {}", msg)? }
-            ReplError::EvaluationError(msg) => {write!(f, "REPL Evaluation error: {}", msg)? }
+            ReplError::TokenisationError(msg) => { write!(f, "REPL tokenisation error: {}", msg)? }
+            ReplError::ParsingError(msg) => { write!(f, "RERPL parsing error: {}", msg)? }
+            ReplError::EvaluationError(msg) => {write!(f, "REPL evaluation error: {}", msg)? }
         }
         Ok(())
     }
