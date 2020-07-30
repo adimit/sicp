@@ -38,8 +38,8 @@ impl fmt::Display for ReplError {
 }
 
 impl From<io::Error> for ReplError {
-    fn from(ioError: io::Error) -> Self {
-        ReplError::IOError(ioError)
+    fn from(e: io::Error) -> Self {
+        ReplError::IOError(e)
     }
 }
 
