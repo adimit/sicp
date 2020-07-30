@@ -1,19 +1,36 @@
+// steps:
+// read input (possible failure)
+// tokenise (possible lexing failure)
+// parse (possible parsing failure, e.g. unbalanced parens)
+// optimise?
+// evaluate (possible evaluation failure, e.g. no definition)
+// print
+
+// tasks:
+// - wrap all return types in result type where needed
+// - decide which errors get thrown where
+// - add error handling in print
+
+use std::fmt;
 use std::io;
 use std::io::{stdout, Write};
-use std::fmt;
+
+enum Token {
+    Number(i64),
+}
 
 enum Input {
-    Line(String),
-    EOF
+    Line(Token),
+    EOF,
 }
 
 enum Command {
-    Quit
+    Quit,
 }
 
 enum EvaluationResult {
     Expression(Expression),
-    Command(Command)
+    Command(Command),
 }
 
 enum Expression {
@@ -24,8 +41,12 @@ enum Expression {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::String(s) => { write!(f, "{}", s)?; }
-            Expression::Int(i) => { write!(f, "{}", i)?; }
+            Expression::String(s) => {
+                write!(f, "{}", s)?;
+            }
+            Expression::Int(i) => {
+                write!(f, "{}", i)?;
+            }
         }
         Ok(())
     }
@@ -38,27 +59,21 @@ fn read() -> Input {
     let mut input = String::new();
 
     match io::stdin().read_line(&mut input) {
-        Ok(0) => { Input::EOF }
-        Ok(_) => {
-            match input.strip_suffix("\n") {
-                Some(s) => {Input::Line(String::from(s))}
-                None => {Input::Line(input)}
-            }
-        }
-        Err(e) => {
-            panic!("Could not read from stdin: {}", e)
-        }
+        Ok(0) => Input::EOF,
+        Ok(_) => match input.strip_suffix("\n") {
+            Some(s) => Input::Line(Token::Number(1)),
+            None => Input::Line(Token::Number(1)),
+        },
+        Err(e) => panic!("Could not read from stdin: {}", e),
     }
 }
 
 fn eval(input: Input) -> EvaluationResult {
     match input {
-        Input::Line(line) => {
-            EvaluationResult::Expression(Expression::String(line))
-        }
-        Input::EOF => {
-            EvaluationResult::Command(Command::Quit)
-        }
+        Input::Line(token) => EvaluationResult::Expression(Expression::Int(match token {
+            Token::Number(n) => n,
+        })),
+        Input::EOF => EvaluationResult::Command(Command::Quit),
     }
 }
 
@@ -70,14 +85,12 @@ fn main() {
             EvaluationResult::Expression(e) => {
                 println!("{}", e);
             }
-            EvaluationResult::Command(c) => {
-                match c {
-                    Command::Quit => {
-                        println!("Bye!");
-                        break;
-                    }
+            EvaluationResult::Command(c) => match c {
+                Command::Quit => {
+                    println!("\nBye!");
+                    break;
                 }
-            }
+            },
         }
     }
 }
