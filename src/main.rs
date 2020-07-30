@@ -2,14 +2,23 @@ use std::io;
 use std::io::{stdout, Write};
 use std::fmt;
 
+enum Command {
+    Quit
+}
+
+enum EvaluationResult {
+    Expression(Expression),
+    Command(Command)
+}
+
 enum Expression {
-    StringExpr(String)
+    String(String)
 }
 
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::StringExpr(s) => { write!(f, "{}", s)?; }
+            Expression::String(s) => { write!(f, "{}", s)?; }
         }
         Ok(())
     }
@@ -31,14 +40,25 @@ fn read() -> String {
     }
 }
 
-fn eval(input: String) -> Expression {
-    Expression::StringExpr(input)
+fn eval(input: String) -> EvaluationResult {
+    EvaluationResult::Expression(Expression::String(input))
 }
 
 fn main() {
     loop {
         let input = read();
         let output = eval(input);
-        println!("{}", output);
+        match output {
+            EvaluationResult::Expression(e) => {
+                println!("{}", e);
+            }
+            EvaluationResult::Command(c) => {
+                match c {
+                    Command::Quit => {
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
