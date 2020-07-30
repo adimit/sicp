@@ -161,10 +161,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn evaluates_simple_expressions() {
+    fn evaluates_primitive_expressions() {
         assert_eq!(
             eval(Input::Line(String::from("123"))).unwrap(),
             EvaluationResult::Expression(Expression::Int(123))
+        )
+    }
+
+    #[test]
+    fn evaluates_addition_expression() {
+        assert_eq!(
+            eval(Input::Line(String::from("(+ 1 2)"))).unwrap(),
+            EvaluationResult::Expression(Expression::Int(3))
         )
     }
 }
