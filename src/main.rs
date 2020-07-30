@@ -2,6 +2,11 @@ use std::io;
 use std::io::{stdout, Write};
 use std::fmt;
 
+enum Input {
+    Line(String),
+    EOF
+}
+
 enum Command {
     Quit
 }
@@ -24,24 +29,35 @@ impl fmt::Display for Expression {
     }
 }
 
-fn read() -> String {
+fn read() -> Input {
     print!("λ> ");
     stdout().flush().expect("Failed to flush stdout.");
 
     let mut input = String::new();
 
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Failed to read a line of input.");
-
-    match input.strip_suffix("\n") {
-        Some(s) => {String::from(s)}
-        None => {input}
+    match io::stdin().read_line(&mut input) {
+        Ok(0) => { Input::EOF }
+        Ok(_) => {
+            match input.strip_suffix("\n") {
+                Some(s) => {Input::Line(String::from(s))}
+                None => {Input::Line(input)}
+            }
+        }
+        Err(e) => {
+            panic!("Could not read from stdin: {}", e)
+        }
     }
 }
 
-fn eval(input: String) -> EvaluationResult {
-    EvaluationResult::Expression(Expression::String(input))
+fn eval(input: Input) -> EvaluationResult {
+    match input {
+        Input::Line(line) => {
+            EvaluationResult::Expression(Expression::String(line))
+        }
+        Input::EOF => {
+            EvaluationResult::Command(Command::Quit)
+        }
+    }
 }
 
 fn main() {
