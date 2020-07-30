@@ -71,6 +71,7 @@ fn main() {
             EvaluationResult::Command(c) => {
                 match c {
                     Command::Quit => {
+                        println!("Bye!");
                         break;
                     }
                 }
