@@ -13,14 +13,42 @@
 
 use std::fmt;
 use std::io;
-use std::io::{stdout, Write};
+use std::{error::Error, io::{stdout, Write}};
+
+#[derive(Debug)]
+enum ReplError {
+    IOError(io::Error),
+    TokenisationError(String),
+    ParsingError(String),
+    EvaluationError(String)
+}
+
+impl Error for ReplError {}
+
+impl fmt::Display for ReplError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ReplError::IOError(e) => { write!(f, "REPL IO error: {}", e)? }
+            ReplError::TokenisationError(msg) => { write!(f, "REPL Tokenisation error: {}", msg)? }
+            ReplError::ParsingError(msg) => { write!(f, "RERPL Parsing error: {}", msg)? }
+            ReplError::EvaluationError(msg) => {write!(f, "REPL Evaluation error: {}", msg)? }
+        }
+        Ok(())
+    }
+}
+
+impl From<io::Error> for ReplError {
+    fn from(ioError: io::Error) -> Self {
+        ReplError::IOError(ioError)
+    }
+}
 
 enum Token {
     Number(i64),
 }
 
 enum Input {
-    Line(Token),
+    Line(String),
     EOF,
 }
 
@@ -52,45 +80,54 @@ impl fmt::Display for Expression {
     }
 }
 
-fn read() -> Input {
+fn read() -> Result<Input, ReplError> {
     print!("λ> ");
-    stdout().flush().expect("Failed to flush stdout.");
+    stdout().flush()?;
 
     let mut input = String::new();
+    let line = io::stdin().read_line(&mut input)?;
 
-    match io::stdin().read_line(&mut input) {
-        Ok(0) => Input::EOF,
-        Ok(_) => match input.strip_suffix("\n") {
-            Some(s) => Input::Line(Token::Number(1)),
-            None => Input::Line(Token::Number(1)),
-        },
-        Err(e) => panic!("Could not read from stdin: {}", e),
-    }
+    Ok(match line {
+        0 => Input::EOF,
+        _ => Input::Line(String::from(input.strip_suffix("\n").unwrap_or(&input))),
+    })
 }
 
-fn eval(input: Input) -> EvaluationResult {
-    match input {
-        Input::Line(token) => EvaluationResult::Expression(Expression::Int(match token {
-            Token::Number(n) => n,
-        })),
+fn eval(input: Input) -> Result<EvaluationResult, ReplError> {
+    Ok(match input {
+        Input::Line(string) => EvaluationResult::Expression(Expression::String(string)),
         Input::EOF => EvaluationResult::Command(Command::Quit),
-    }
+    })
+}
+
+fn repl() -> Result<EvaluationResult, ReplError> {
+    let input = read()?;
+    let output = eval(input)?;
+    Ok(output)
 }
 
 fn main() {
     loop {
-        let input = read();
-        let output = eval(input);
+        let output = repl();
         match output {
-            EvaluationResult::Expression(e) => {
-                println!("{}", e);
-            }
-            EvaluationResult::Command(c) => match c {
-                Command::Quit => {
-                    println!("\nBye!");
-                    break;
+            Ok(result) => {
+                match result {
+                    EvaluationResult::Expression(e) => {
+                        println!("{}", e);
+                    }
+                    EvaluationResult::Command(c) => {
+                        match c {
+                            Command::Quit => {
+                                println!("\nBye!");
+                                break;
+                            }
+                        }
+                    }
                 }
-            },
+            }
+            Err(e) => {
+                println!("Encountered an error:\n{}", e);
+            }
         }
     }
 }
