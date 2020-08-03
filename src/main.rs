@@ -35,7 +35,7 @@ impl From<io::Error> for ReplError {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, Copy, PartialEq)]
 struct Span {
     begin: usize,
     end: usize,
@@ -45,6 +45,12 @@ struct Span {
 struct Token {
     content: TokenData,
     span: Span,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
 }
 
 impl Token {
@@ -80,20 +86,116 @@ enum EvaluationResult {
     Command(Command),
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+struct NodeId(usize);
+
+impl fmt::Display for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
-enum Expression {
-    String(String),
+struct Expression {
+    span: Span,
+    id: NodeId,
+    content: ExpressionData,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum ExpressionData {
+    Symbol(String),
     Int(i64),
+    Application(NodeId, Vec<NodeId>),
+}
+
+type ReplResult<T> = Result<T, ReplError>;
+
+// hand-rolled arena allocator. Static, no content mutability
+struct AST {
+    nodes: Vec<NodeId>,
+    roots: Vec<NodeId>,
+}
+
+impl AST {
+    fn new() -> Self {
+        AST {
+            nodes: Vec::new(),
+            roots: Vec::new(),
+        }
+    }
+
+    fn new_expression(&mut self, span: Span, content: ExpressionData) -> NodeId {
+        todo!()
+    }
+
+    fn new_application<'a, I: IntoIterator<Item = &'a NodeId>>(
+        &mut self,
+        head: NodeId,
+        args: I,
+    ) -> ReplResult<NodeId> {
+        // check out that the given node ids exist
+        // while checking the references, get the spans
+        todo!()
+    }
+
+    fn get_node(&self, id: NodeId) -> Option<&Expression> {
+        todo!()
+    }
+
+    fn add_root(&self, id: NodeId) -> ReplResult<()> {
+        todo!()
+    }
+
+    fn get_roots<'a, I: Iterator<Item = &'a Expression>>(&self) -> I {
+        todo!()
+    }
+}
+
+#[cfg(test)]
+mod ast_tests {
+    #[test]
+    fn insert_an_expression() {}
+
+    #[test]
+    fn insert_application_without_args() {
+        // check spans
+    }
+
+    #[test]
+    fn insert_application_with_args() {
+        // check spans
+    }
+
+    #[test]
+    fn insert_application_with_wrong_funhead_nodeid() {}
+
+    #[test]
+    fn insert_application_with_wrong_args_nodeid() {}
+
+    #[test]
+    fn add_root_nodes() {}
+
+    #[test]
+    fn add_root_nodes_with_wrong_node_id() {}
 }
 
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Expression::String(s) => {
+        let content = &self.content;
+        match content {
+            ExpressionData::Symbol(s) => {
                 write!(f, "{}", s)?;
             }
-            Expression::Int(i) => {
+            ExpressionData::Int(i) => {
                 write!(f, "{}", i)?;
+            }
+            ExpressionData::Application(head, tail) => {
+                write!(f, "({}", head)?;
+                for expr in tail.iter() {
+                    write!(f, " {}", expr.to_string())?;
+                }
+                write!(f, ")")?;
             }
         }
         Ok(())
@@ -177,28 +279,84 @@ fn read() -> Result<Input, ReplError> {
     )))
 }
 
-fn evaluate_tokens(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
-    tokens
-        .get(0)
-        .map(|token| match &token.content {
-            TokenData::Number(num) => EvaluationResult::Expression(Expression::Int(*num)),
-            TokenData::Symbol(sym) => EvaluationResult::Expression(Expression::String(sym.clone())),
-            TokenData::OpenParen => {
-                EvaluationResult::Expression(Expression::String(String::from("(")))
-            }
-            TokenData::ClosedParen => {
-                EvaluationResult::Expression(Expression::String(String::from(")")))
-            }
-        })
-        .map_or(
-            Err(ReplError::EvaluationError(String::from(
-                "No tokens to evaluate",
-            ))),
-            |result| Ok(result),
-        )
+fn to_result<T, E>(option: Option<T>, error: E) -> Result<T, E> {
+    match option {
+        Some(content) => Ok(content),
+        None => Err(error),
+    }
 }
 
-fn eval(input: Input) -> Result<EvaluationResult, ReplError> {
+// Recursive ast building function. Each invocation covers one level
+// of depth, successive recurvise calls increase depth.
+fn build_ast<'a, I: Iterator<Item = &'a Token>>(
+    tit: &mut I,
+    ast: &mut AST,
+    depth: usize,
+) -> Result<Vec<NodeId>, ReplError> where
+{
+    let mut forest = Vec::new();
+
+    while let Some(token) = tit.next() {
+        let expr = match &token.content {
+            TokenData::Number(number) => {
+                Ok(ast.new_expression(token.span, ExpressionData::Int(*number)))
+            }
+            TokenData::Symbol(s) => {
+                Ok(ast.new_expression(token.span, ExpressionData::Symbol(String::from(s))))
+            }
+
+            TokenData::OpenParen => {
+                let content = build_ast(tit, ast, depth + 1)?;
+                if content.len() < 1 {
+                    Err(ReplError::ParsingError(format!(
+                        "Empty function application, at {}",
+                        token
+                    )))
+                } else {
+                    // since we know there's some content, we can
+                    // assume there's an element 0, and a last element.
+                    let funhead = content[0];
+                    let rest = &content[1..];
+                    ast.new_application(funhead, rest)
+                }
+            }
+            TokenData::ClosedParen => match depth {
+                0 => Err(ReplError::ParsingError(format!(
+                    "Unbalanced parentheses. Unexpected `)` at {}.",
+                    token.span.begin
+                ))),
+                _ => return Ok(forest), // hop out of the loop and return forest as is
+            },
+        }?;
+        forest.push(expr);
+    }
+    // End of input has been reached. If we're not at depth == 0,
+    // somebody forgot to balance their paretheses.
+    if depth == 0 {
+        // Add all the nodes from depth = 0 to the root node pool
+        let _units = forest
+            .iter()
+            .map(|node| ast.add_root(*node))
+            .collect::<Result<Vec<()>, ReplError>>()?;
+        Ok(forest)
+    } else {
+        Err(ReplError::ParsingError(format!(
+            "Expected {} closing parentheses at end of input.",
+            depth
+        )))
+    }
+}
+
+fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
+    let mut tit = tokens.iter();
+    let mut ast: AST = AST::new();
+
+    let _forest = build_ast(&mut tit, &mut ast, 0);
+
+    todo!("Like, implement AST generation *and* evaluation. Hop hop!")
+}
+
+fn eval<'a>(input: Input) -> Result<EvaluationResult, ReplError> {
     match input {
         Input::Line(string) => {
             let tokens = tokenise(&string)?;
@@ -208,7 +366,7 @@ fn eval(input: Input) -> Result<EvaluationResult, ReplError> {
     }
 }
 
-fn repl() -> Result<EvaluationResult, ReplError> {
+fn repl<'a>() -> Result<EvaluationResult, ReplError> {
     let input = read()?;
     let output = eval(input)?;
     Ok(output)
@@ -242,10 +400,13 @@ mod tests {
 
     #[test]
     fn evaluates_primitive_expressions() {
-        assert_eq!(
-            eval(Input::Line(String::from("123"))).unwrap(),
-            EvaluationResult::Expression(Expression::Int(123))
-        )
+        if let EvaluationResult::Expression(expr) = eval(Input::Line(String::from("123"))).unwrap()
+        {
+            assert_eq!(expr.span, Span { begin: 0, end: 2 });
+            assert_eq!(expr.content, ExpressionData::Int(123));
+        } else {
+            panic!("Wrong evaluation result");
+        }
     }
 
     #[test]
@@ -280,9 +441,12 @@ mod tests {
 
     #[test]
     fn evaluates_addition_expression() {
-        assert_eq!(
-            eval(Input::Line(String::from("(+ 1 2)"))).unwrap(),
-            EvaluationResult::Expression(Expression::Int(3))
-        )
+        if let EvaluationResult::Expression(expr) =
+            eval(Input::Line(String::from("(+ 1 2)"))).unwrap()
+        {
+            assert_eq!(expr.content, ExpressionData::Int(3))
+        } else {
+            panic!("Wrong evaluation result");
+        }
     }
 }
