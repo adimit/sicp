@@ -49,7 +49,22 @@ struct Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+        write!(
+            f,
+            "[{} ({}, {})]",
+            self.content, self.span.begin, self.span.end
+        )
+    }
+}
+
+impl fmt::Display for TokenData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TokenData::OpenParen => write!(f, "("),
+            TokenData::ClosedParen => write!(f, "("),
+            TokenData::Number(n) => write!(f, "num:{}", n),
+            TokenData::Symbol(s) => write!(f, "sym:{}", s),
+        }
     }
 }
 
@@ -91,7 +106,8 @@ struct NodeId(usize);
 
 impl fmt::Display for NodeId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+        let NodeId(num) = self;
+        write!(f, "node:{}", num)
     }
 }
 
@@ -113,7 +129,7 @@ type ReplResult<T> = Result<T, ReplError>;
 
 // hand-rolled arena allocator. Static, no content mutability
 struct AST {
-    nodes: Vec<NodeId>,
+    nodes: Vec<Expression>,
     roots: Vec<NodeId>,
 }
 
@@ -126,29 +142,57 @@ impl AST {
     }
 
     fn new_expression(&mut self, span: Span, content: ExpressionData) -> NodeId {
-        todo!()
+        let id = NodeId(self.nodes.len());
+        let expr = Expression { span, content, id };
+        self.nodes.push(expr);
+        id
     }
 
-    fn new_application<'a, I: IntoIterator<Item = &'a NodeId>>(
+    fn new_application<'a, I: IntoIterator<Item = NodeId>>(
         &mut self,
         head: NodeId,
         args: I,
     ) -> ReplResult<NodeId> {
         // check out that the given node ids exist
         // while checking the references, get the spans
-        todo!()
+        let head_expr = self
+            .get_node(head)
+            .ok_or(ReplError::ParsingError(format!("Unknown node {}", head)))?;
+        let tail = args.into_iter().collect::<Vec<NodeId>>();
+        let mut max_span = head_expr.span.end;
+        tail.iter()
+            .map(|node| {
+                let expr = self.get_node(*node).ok_or(ReplError::ParsingError(format!(
+                    "Unknown node {}",
+                    head_expr
+                )))?;
+                max_span = std::cmp::max(max_span, expr.span.end);
+                Ok(expr)
+            })
+            .collect::<Result<Vec<&Expression>, ReplError>>()?;
+        let id = NodeId(self.nodes.len());
+        let expr = Expression {
+            span: Span {
+                begin: head_expr.span.begin,
+                end: max_span,
+            },
+            id,
+            content: ExpressionData::Application(head, tail),
+        };
+        self.nodes.push(expr);
+        Ok(id)
     }
 
     fn get_node(&self, id: NodeId) -> Option<&Expression> {
-        todo!()
+        let NodeId(n) = id;
+        self.nodes.get(n)
     }
 
-    fn add_root(&self, id: NodeId) -> ReplResult<()> {
-        todo!()
-    }
-
-    fn get_roots(&self) -> Vec<NodeId> {
-        todo!()
+    fn add_root(&mut self, id: NodeId) -> ReplResult<()> {
+        self.get_node(id)
+            .ok_or(ReplError::ParsingError(format!("Unknown node {}", id)))?;
+        self.roots.push(id);
+        Ok(())
     }
 }
 
@@ -173,7 +217,7 @@ mod ast_tests {
         let mut ast = AST::new();
         let expr = ExpressionData::Symbol("foo".to_string());
         let id = ast.new_expression(span(0, 1), expr);
-        let ap = ast.new_application(id, &[]).unwrap();
+        let ap = ast.new_application(id, vec![]).unwrap();
         let ap_expr = ast.get_node(ap).unwrap();
         assert_eq!(ap_expr.span, span(0, 1));
 
@@ -195,7 +239,7 @@ mod ast_tests {
         let args_1 = ast.new_expression(span(3, 5), expr_1);
         let args_2 = ast.new_expression(span(6, 8), expr_2);
 
-        let ap = ast.new_application(head_id, &[args_1, args_2]).unwrap();
+        let ap = ast.new_application(head_id, vec![args_1, args_2]).unwrap();
         let ap_expr = ast.get_node(ap).unwrap();
 
         assert_eq!(ap_expr.span, span(0, 8));
@@ -211,7 +255,7 @@ mod ast_tests {
     #[test]
     fn insert_application_with_wrong_funhead_nodeid() {
         let mut ast = AST::new();
-        let result = ast.new_application(NodeId(0), &[]);
+        let result = ast.new_application(NodeId(0), vec![]);
         assert!(result.is_err());
     }
 
@@ -220,7 +264,7 @@ mod ast_tests {
         let mut ast = AST::new();
         let expr = ExpressionData::Symbol("foo".to_string());
         let head = ast.new_expression(span(0, 0), expr);
-        let result = ast.new_application(head, &[NodeId(99)]);
+        let result = ast.new_application(head, vec![NodeId(99)]);
         assert!(result.is_err());
     }
 
@@ -229,12 +273,11 @@ mod ast_tests {
         let mut ast = AST::new();
         let expr = ExpressionData::Symbol("foo".to_string());
         let head = ast.new_expression(span(0, 0), expr);
-        let ap = ast.new_application(head, &[]).unwrap();
+        let ap = ast.new_application(head, vec![]).unwrap();
         let root_added = ast.add_root(ap);
         assert!(root_added.is_ok());
 
-        let roots = ast.get_roots();
-        assert_eq!(roots, vec!(ap));
+        assert_eq!(ast.roots, vec!(ap));
     }
 
     #[test]
@@ -344,13 +387,6 @@ fn read() -> Result<Input, ReplError> {
     )))
 }
 
-fn to_result<T, E>(option: Option<T>, error: E) -> Result<T, E> {
-    match option {
-        Some(content) => Ok(content),
-        None => Err(error),
-    }
-}
-
 // Recursive ast building function. Each invocation covers one level
 // of depth, successive recurvise calls increase depth.
 fn build_ast<'a, I: Iterator<Item = &'a Token>>(
@@ -380,9 +416,9 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
                 } else {
                     // since we know there's some content, we can
                     // assume there's an element 0, and a last element.
-                    let funhead = content[0];
-                    let rest = &content[1..];
-                    ast.new_application(funhead, rest)
+                    let mut args = content.iter().cloned();
+                    args.next();
+                    ast.new_application(content[0], args)
                 }
             }
             TokenData::ClosedParen => match depth {
@@ -402,7 +438,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
         let _units = forest
             .iter()
             .map(|node| ast.add_root(*node))
-            .collect::<Result<Vec<()>, ReplError>>()?;
+            .collect::<Result<Vec<()>, ReplError>>();
         Ok(forest)
     } else {
         Err(ReplError::ParsingError(format!(
