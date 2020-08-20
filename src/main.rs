@@ -97,7 +97,8 @@ enum Command {
 
 #[derive(Debug, Eq, PartialEq)]
 enum EvaluationResult {
-    Expression(Expression),
+    Symbol(String),
+    Int(i64),
     Command(Command),
 }
 
@@ -448,11 +449,57 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
     }
 }
 
+fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationResult> {
+    match &expr.content {
+        ExpressionData::Application(nodeid, args) => {
+            let head = ast
+                .get_node(*nodeid)
+                .ok_or(ReplError::EvaluationError(format!(
+                    "Unknown node id {}.",
+                    nodeid
+                )))?;
+            let evaluated_head = evaluate_expr(head, ast)?;
+            let evaluated_args = args
+                .iter()
+                .map(|arg| {
+                    let arg_expr =
+                        ast.get_node(*arg)
+                            .ok_or(ReplError::EvaluationError(format!(
+                                "Unknown node id {}.",
+                                arg
+                            )))?;
+                    evaluate_expr(arg_expr, ast)
+                })
+                .collect::<ReplResult<Vec<EvaluationResult>>>()?;
+
+            // find the function denoted by head
+            // give it the arguments denoted by args
+            // ??
+            // profit
+
+            todo!()
+        }
+        ExpressionData::Symbol(sym) => Ok(EvaluationResult::Symbol(sym.to_string())),
+        ExpressionData::Int(int) => Ok(EvaluationResult::Int(*int)),
+    }
+}
+
 fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
     let mut tit = tokens.iter();
     let mut ast: AST = AST::new();
 
-    let _forest = build_ast(&mut tit, &mut ast, 0);
+    let forest = build_ast(&mut tit, &mut ast, 0)?;
+
+    let results = forest
+        .iter()
+        .map(|nodeid| match ast.get_node(*nodeid) {
+            Some(tree) => evaluate_expr(tree, &ast),
+            None => Err(ReplError::EvaluationError(format!(
+                "Unkonwn node id {}.",
+                *nodeid
+            ))),
+        })
+        .collect::<ReplResult<Vec<EvaluationResult>>>()?;
 
     todo!("Like, implement AST generation *and* evaluation. Hop hop!")
 }
@@ -478,8 +525,11 @@ fn main() {
         let output = repl();
         match output {
             Ok(result) => match result {
-                EvaluationResult::Expression(e) => {
-                    println!("{}", e);
+                EvaluationResult::Symbol(sym) => {
+                    println!("{}", sym);
+                }
+                EvaluationResult::Int(int) => {
+                    println!("{}", int);
                 }
                 EvaluationResult::Command(c) => match c {
                     Command::Quit => {
