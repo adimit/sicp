@@ -1,0 +1,10 @@
+* Scheme in Rust
+
+This is an experimental Scheme in Rust. It serves as an accompaniment to reading SICP, and has no purpose outside of that.
+
+* Tasks
+** TODO =EvaluationResult= needs spans
+Error reporting could be improved by adding spans to =EvaluationResult=
+** TODO Test for error messages reporting locations
+Any error about evaluation or parsing should always carry positional information
+** TODO Refactor
