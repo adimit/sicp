@@ -5,6 +5,8 @@ This is an experimental Scheme in Rust. It serves as an accompaniment to reading
 * Tasks
 ** TODO =EvaluationResult= needs spans
 Error reporting could be improved by adding spans to =EvaluationResult=
+** TODO (+12) should not give invalid function head expression Int(12)
+=+12= should be parsed as a symbol. It's also weird that =+12= doesn't just work now, because shouldn't it be a =Sym(+)= followed by =Int(12)=?
 ** TODO Test for error messages reporting locations
-Any error about evaluation or parsing should always carry positional information
+Any error about evaluation or parsing should always carry positional information. Refactor ReplError to carry a span and implement =fmt::Display=
 ** TODO Refactor
