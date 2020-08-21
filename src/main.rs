@@ -95,11 +95,29 @@ enum Command {
     Quit,
 }
 
+impl fmt::Display for Command {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Command::Quit => write!(fmt, "QUIT"),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 enum EvaluationResult {
     Symbol(String),
     Int(i64),
     Command(Command),
+}
+
+impl fmt::Display for EvaluationResult {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EvaluationResult::Symbol(sym) => write!(fmt, "Sym({})", sym),
+            EvaluationResult::Int(int) => write!(fmt, "Int({})", int),
+            EvaluationResult::Command(cmd) => write!(fmt, "Cmd({})", cmd),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -451,6 +469,8 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
 
 fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationResult> {
     match &expr.content {
+        ExpressionData::Symbol(sym) => Ok(EvaluationResult::Symbol(sym.to_string())),
+        ExpressionData::Int(int) => Ok(EvaluationResult::Int(*int)),
         ExpressionData::Application(nodeid, args) => {
             let head = ast
                 .get_node(*nodeid)
@@ -472,15 +492,26 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                 })
                 .collect::<ReplResult<Vec<EvaluationResult>>>()?;
 
-            // find the function denoted by head
-            // give it the arguments denoted by args
-            // ??
-            // profit
-
-            todo!()
+            match evaluated_head {
+                EvaluationResult::Symbol(sym) if sym == "+" => {
+                    let numbers = evaluated_args
+                        .iter()
+                        .map(|arg| match arg {
+                            EvaluationResult::Int(number) => Ok(*number),
+                            _ => Err(ReplError::EvaluationError(format!(
+                                "Wrong type argument {}.",
+                                arg
+                            ))),
+                        })
+                        .collect::<ReplResult<Vec<i64>>>()?;
+                    Ok(EvaluationResult::Int(numbers.iter().sum()))
+                }
+                _ => Err(ReplError::EvaluationError(format!(
+                    "Invalid function head expression {} at {}-{}.",
+                    evaluated_head, head.span.begin, head.span.end
+                ))),
+            }
         }
-        ExpressionData::Symbol(sym) => Ok(EvaluationResult::Symbol(sym.to_string())),
-        ExpressionData::Int(int) => Ok(EvaluationResult::Int(*int)),
     }
 }
 
@@ -490,7 +521,7 @@ fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError
 
     let forest = build_ast(&mut tit, &mut ast, 0)?;
 
-    let results = forest
+    let mut results = forest
         .iter()
         .map(|nodeid| match ast.get_node(*nodeid) {
             Some(tree) => evaluate_expr(tree, &ast),
@@ -501,7 +532,9 @@ fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError
         })
         .collect::<ReplResult<Vec<EvaluationResult>>>()?;
 
-    todo!("Like, implement AST generation *and* evaluation. Hop hop!")
+    results
+        .pop()
+        .ok_or(ReplError::EvaluationError("No results!".to_string()))
 }
 
 fn eval<'a>(input: Input) -> Result<EvaluationResult, ReplError> {
@@ -551,13 +584,7 @@ mod tests {
 
     #[test]
     fn evaluates_primitive_expressions() {
-        if let EvaluationResult::Expression(expr) = eval(Input::Line(String::from("123"))).unwrap()
-        {
-            assert_eq!(expr.span, Span { begin: 0, end: 2 });
-            assert_eq!(expr.content, ExpressionData::Int(123));
-        } else {
-            panic!("Wrong evaluation result");
-        }
+        assert_eq!(test_eval("123").unwrap(), EvaluationResult::Int(123));
     }
 
     #[test]
@@ -589,15 +616,35 @@ mod tests {
             ]
         )
     }
+    fn test_eval(input: &str) -> ReplResult<EvaluationResult> {
+        eval(Input::Line(input.to_string()))
+    }
 
     #[test]
     fn evaluates_addition_expression() {
-        if let EvaluationResult::Expression(expr) =
-            eval(Input::Line(String::from("(+ 1 2)"))).unwrap()
-        {
-            assert_eq!(expr.content, ExpressionData::Int(3))
-        } else {
-            panic!("Wrong evaluation result");
-        }
+        assert_eq!(test_eval("(+ 1 2)").unwrap(), EvaluationResult::Int(3));
+    }
+
+    #[test]
+    fn evaluates_nested_addition_expression() {
+        assert_eq!(
+            test_eval("(+ 1 (+ 2 3) 4 5)").unwrap(),
+            EvaluationResult::Int(15)
+        );
+    }
+
+    #[test]
+    fn error_on_unknown_function() {
+        assert!(test_eval("(foo)").is_err())
+    }
+
+    #[test]
+    fn error_on_wrong_type_argument_for_sum() {
+        assert!(test_eval("(+ foo)").is_err())
+    }
+
+    #[test]
+    fn sum_of_no_numbers_is_zero() {
+        assert_eq!(test_eval("(+)").unwrap(), EvaluationResult::Int(0));
     }
 }
