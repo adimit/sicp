@@ -42,17 +42,36 @@ impl From<io::Error> for ReplError {
 }
 
 #[derive(Debug, Eq, Clone, Copy, PartialEq)]
-struct Position {
-    begin: usize,
-    end: usize,
+enum Position {
+    Span(usize, usize),
+    Point(usize),
+    Unknown,
+}
+
+impl Position {
+    fn get_high(&self) -> Option<usize> {
+        match self {
+            Position::Span(_, high) => Some(*high),
+            Position::Point(point) => Some(*point),
+            Position::Unknown => None,
+        }
+    }
+
+    fn get_low(&self) -> Option<usize> {
+        match self {
+            Position::Span(low, _) => Some(*low),
+            Position::Point(point) => Some(*point),
+            Position::Unknown => None,
+        }
+    }
 }
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.begin == self.end {
-            write!(f, "{}", self.begin)
-        } else {
-            write!(f, "{} — {}", self.begin, self.end)
+        match self {
+            Position::Span(begin, end) => write!(f, "{} — {}", begin, end),
+            Position::Point(point) => write!(f, "{}", point),
+            Position::Unknown => write!(f, "unknown position"),
         }
     }
 }
@@ -65,11 +84,7 @@ struct Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{} ({}, {})]",
-            self.content, self.span.begin, self.span.end
-        )
+        write!(f, "[{} ({})]", self.content, self.span)
     }
 }
 
@@ -87,7 +102,7 @@ impl fmt::Display for TokenData {
 impl Token {
     fn create(begin: usize, end: usize, content: TokenData) -> Self {
         Token {
-            span: Position { begin, end },
+            span: Position::Span(begin, end),
             content,
         }
     }
@@ -192,26 +207,37 @@ impl AST {
         // while checking the references, get the spans
         let head_expr = self.get_node(head).ok_or(ReplError::ParsingError(
             format!("Unknown node {}", head),
-            Position { begin: 0, end: 0 },
+            Position::Unknown,
         ))?;
         let tail = args.into_iter().collect::<Vec<NodeId>>();
-        let mut max_span = head_expr.span.end;
+        let mut max_span = head_expr
+            .span
+            .get_high()
+            .expect("Expressions should always have a position");
         tail.iter()
             .map(|node| {
                 let expr = self.get_node(*node).ok_or(ReplError::ParsingError(
                     format!("Unknown node {}", head_expr),
-                    Position { begin: 0, end: 0 },
+                    Position::Unknown,
                 ))?;
-                max_span = std::cmp::max(max_span, expr.span.end);
+                max_span = std::cmp::max(
+                    max_span,
+                    expr.span
+                        .get_high()
+                        .expect("Expressions should always have a position"),
+                );
                 Ok(expr)
             })
             .collect::<Result<Vec<&Expression>, ReplError>>()?;
         let id = NodeId(self.nodes.len());
         let expr = Expression {
-            span: Position {
-                begin: head_expr.span.begin,
-                end: max_span,
-            },
+            span: Position::Span(
+                head_expr
+                    .span
+                    .get_low()
+                    .expect("Expressions should always have a position"),
+                max_span,
+            ),
             id,
             content: ExpressionData::Application(head, tail),
         };
@@ -227,7 +253,7 @@ impl AST {
     fn add_root(&mut self, id: NodeId) -> ReplResult<()> {
         self.get_node(id).ok_or(ReplError::ParsingError(
             format!("Unknown node {}", id),
-            Position { begin: 0, end: 0 },
+            Position::Unknown,
         ))?;
         self.roots.push(id);
         Ok(())
@@ -239,7 +265,7 @@ mod ast_tests {
     use super::*;
 
     fn span(begin: usize, end: usize) -> Position {
-        Position { begin, end }
+        Position::Span(begin, end)
     }
 
     #[test]
@@ -360,10 +386,7 @@ fn tokenise(string: &str) -> Result<Vec<Token>, ReplError> {
     match chars.peek() {
         Some((pos, c)) => Err(ReplError::TokenisationError(
             format!("Unrecognised input `{}`", c),
-            Position {
-                begin: *pos,
-                end: *pos,
-            },
+            Position::Point(*pos),
         )),
         None => Ok(tokens),
     }
@@ -486,7 +509,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
     } else {
         Err(ReplError::ParsingError(
             format!("Expected {} closing parentheses at end of input.", depth),
-            Position { begin: 0, end: 0 },
+            Position::Unknown,
         ))
     }
 }
@@ -498,7 +521,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
         ExpressionData::Application(nodeid, args) => {
             let head = ast.get_node(*nodeid).ok_or(ReplError::EvaluationError(
                 format!("Unknown node id {}.", nodeid),
-                Position { begin: 0, end: 0 },
+                Position::Unknown,
             ))?;
             let evaluated_head = evaluate_expr(head, ast)?;
             let evaluated_args = args
@@ -506,7 +529,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                 .map(|arg| {
                     let arg_expr = ast.get_node(*arg).ok_or(ReplError::EvaluationError(
                         format!("Unknown node id {}.", arg),
-                        Position { begin: 0, end: 0 },
+                        Position::Unknown,
                     ))?;
                     evaluate_expr(arg_expr, ast)
                 })
@@ -520,7 +543,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                             EvaluationResult::Int(number) => Ok(*number),
                             _ => Err(ReplError::EvaluationError(
                                 format!("Wrong type argument {}.", arg),
-                                Position { begin: 0, end: 0 },
+                                Position::Unknown,
                             )),
                         })
                         .collect::<ReplResult<Vec<i64>>>()?;
@@ -547,14 +570,14 @@ fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError
             Some(tree) => evaluate_expr(tree, &ast),
             None => Err(ReplError::EvaluationError(
                 format!("Unkonwn node id {}.", *nodeid),
-                Position { begin: 0, end: 0 },
+                Position::Unknown,
             )),
         })
         .collect::<ReplResult<Vec<EvaluationResult>>>()?;
 
     results.pop().ok_or(ReplError::EvaluationError(
         "No results!".to_string(),
-        Position { begin: 0, end: 0 },
+        Position::Unknown,
     ))
 }
 
@@ -615,23 +638,23 @@ mod tests {
             result,
             [
                 Token {
-                    span: Position { begin: 0, end: 0 },
+                    span: Position::Span(0, 0),
                     content: TokenData::OpenParen
                 },
                 Token {
-                    span: Position { begin: 1, end: 3 },
+                    span: Position::Span(1, 3),
                     content: TokenData::Symbol("foo".to_string())
                 },
                 Token {
-                    span: Position { begin: 5, end: 7 },
+                    span: Position::Span(5, 7),
                     content: TokenData::Symbol("bar".to_string())
                 },
                 Token {
-                    span: Position { begin: 9, end: 11 },
+                    span: Position::Span(9, 11),
                     content: TokenData::Number(123)
                 },
                 Token {
-                    span: Position { begin: 12, end: 12 },
+                    span: Position::Span(12, 12),
                     content: TokenData::ClosedParen
                 },
             ]
