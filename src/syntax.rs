@@ -6,7 +6,7 @@ use std::fmt;
 pub struct NodeId(usize);
 
 impl fmt::Display for NodeId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let NodeId(num) = self;
         write!(f, "node:{}", num)
     }
@@ -69,7 +69,7 @@ impl AST {
         id
     }
 
-    fn new_application<'a, I: IntoIterator<Item = NodeId>>(
+    fn new_application<I: IntoIterator<Item = NodeId>>(
         &mut self,
         head: NodeId,
         args: I,

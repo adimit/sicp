@@ -34,7 +34,7 @@ impl fmt::Display for EvaluationResult {
     }
 }
 
-fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationResult> {
+fn evaluate_expr(expr: &Expression, ast: &AST) -> ReplResult<EvaluationResult> {
     match &expr.content {
         ExpressionData::Symbol(sym) => Ok(EvaluationResult::Symbol(sym.to_string())),
         ExpressionData::Int(int) => Ok(EvaluationResult::Int(*int)),

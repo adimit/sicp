@@ -28,7 +28,7 @@ fn read() -> ReplResult<Input> {
     )))
 }
 
-fn eval<'a>(input: Input) -> ReplResult<EvaluationResult> {
+fn eval(input: Input) -> ReplResult<EvaluationResult> {
     match input {
         Input::Line(string) => {
             let tokens = tokenise(&string)?;
@@ -39,7 +39,7 @@ fn eval<'a>(input: Input) -> ReplResult<EvaluationResult> {
     }
 }
 
-fn repl<'a>() -> ReplResult<EvaluationResult> {
+fn repl() -> ReplResult<EvaluationResult> {
     let input = read()?;
     eval(input)
 }
