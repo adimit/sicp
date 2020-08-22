@@ -42,6 +42,24 @@ impl From<io::Error> for ReplError {
 }
 
 #[derive(Debug, Eq, Clone, Copy, PartialEq)]
+struct Span {
+    begin: usize,
+    end: usize,
+}
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.begin, self.end)
+    }
+}
+
+impl Span {
+    fn new(begin: usize, end: usize) -> Span {
+        Span { begin, end }
+    }
+}
+
+#[derive(Debug, Eq, Clone, Copy, PartialEq)]
 enum Position {
     Span(usize, usize),
     Point(usize),
@@ -49,20 +67,8 @@ enum Position {
 }
 
 impl Position {
-    fn get_high(&self) -> Option<usize> {
-        match self {
-            Position::Span(_, high) => Some(*high),
-            Position::Point(point) => Some(*point),
-            Position::Unknown => None,
-        }
-    }
-
-    fn get_low(&self) -> Option<usize> {
-        match self {
-            Position::Span(low, _) => Some(*low),
-            Position::Point(point) => Some(*point),
-            Position::Unknown => None,
-        }
+    fn from_span(span: &Span) -> Position {
+        Position::Span(span.begin, span.end)
     }
 }
 
@@ -79,7 +85,7 @@ impl fmt::Display for Position {
 #[derive(Debug, Eq, PartialEq)]
 struct Token {
     content: TokenData,
-    span: Position,
+    span: Span,
 }
 
 impl fmt::Display for Token {
@@ -102,7 +108,7 @@ impl fmt::Display for TokenData {
 impl Token {
     fn create(begin: usize, end: usize, content: TokenData) -> Self {
         Token {
-            span: Position::Span(begin, end),
+            span: Span { begin, end },
             content,
         }
     }
@@ -163,7 +169,7 @@ impl fmt::Display for NodeId {
 
 #[derive(Debug, Eq, PartialEq)]
 struct Expression {
-    span: Position,
+    span: Span,
     id: NodeId,
     content: ExpressionData,
 }
@@ -191,7 +197,7 @@ impl AST {
         }
     }
 
-    fn new_expression(&mut self, span: Position, content: ExpressionData) -> NodeId {
+    fn new_expression(&mut self, span: Span, content: ExpressionData) -> NodeId {
         let id = NodeId(self.nodes.len());
         let expr = Expression { span, content, id };
         self.nodes.push(expr);
@@ -210,34 +216,20 @@ impl AST {
             Position::Unknown,
         ))?;
         let tail = args.into_iter().collect::<Vec<NodeId>>();
-        let mut max_span = head_expr
-            .span
-            .get_high()
-            .expect("Expressions should always have a position");
+        let mut max_span = head_expr.span.end;
         tail.iter()
             .map(|node| {
                 let expr = self.get_node(*node).ok_or(ReplError::ParsingError(
                     format!("Unknown node {}", head_expr),
                     Position::Unknown,
                 ))?;
-                max_span = std::cmp::max(
-                    max_span,
-                    expr.span
-                        .get_high()
-                        .expect("Expressions should always have a position"),
-                );
+                max_span = std::cmp::max(max_span, expr.span.end);
                 Ok(expr)
             })
             .collect::<Result<Vec<&Expression>, ReplError>>()?;
         let id = NodeId(self.nodes.len());
         let expr = Expression {
-            span: Position::Span(
-                head_expr
-                    .span
-                    .get_low()
-                    .expect("Expressions should always have a position"),
-                max_span,
-            ),
+            span: Span::new(head_expr.span.begin, max_span),
             id,
             content: ExpressionData::Application(head, tail),
         };
@@ -264,15 +256,11 @@ impl AST {
 mod ast_tests {
     use super::*;
 
-    fn span(begin: usize, end: usize) -> Position {
-        Position::Span(begin, end)
-    }
-
     #[test]
     fn insert_an_expression() {
         let mut ast = AST::new();
         let expr = ExpressionData::Int(1);
-        let id = ast.new_expression(span(0, 0), expr);
+        let id = ast.new_expression(Span::new(0, 0), expr);
         assert!(ast.get_node(id).is_some());
     }
 
@@ -280,10 +268,10 @@ mod ast_tests {
     fn insert_application_without_args() {
         let mut ast = AST::new();
         let expr = ExpressionData::Symbol("foo".to_string());
-        let id = ast.new_expression(span(0, 1), expr);
+        let id = ast.new_expression(Span::new(0, 1), expr);
         let ap = ast.new_application(id, vec![]).unwrap();
         let ap_expr = ast.get_node(ap).unwrap();
-        assert_eq!(ap_expr.span, span(0, 1));
+        assert_eq!(ap_expr.span, Span::new(0, 1));
 
         if let ExpressionData::Application(head, tail) = &ap_expr.content {
             assert_eq!(*head, id);
@@ -299,14 +287,14 @@ mod ast_tests {
         let expr = ExpressionData::Symbol("foo".to_string());
         let expr_1 = ExpressionData::Symbol("bar".to_string());
         let expr_2 = ExpressionData::Symbol("baz".to_string());
-        let head_id = ast.new_expression(span(0, 2), expr);
-        let args_1 = ast.new_expression(span(3, 5), expr_1);
-        let args_2 = ast.new_expression(span(6, 8), expr_2);
+        let head_id = ast.new_expression(Span::new(0, 2), expr);
+        let args_1 = ast.new_expression(Span::new(3, 5), expr_1);
+        let args_2 = ast.new_expression(Span::new(6, 8), expr_2);
 
         let ap = ast.new_application(head_id, vec![args_1, args_2]).unwrap();
         let ap_expr = ast.get_node(ap).unwrap();
 
-        assert_eq!(ap_expr.span, span(0, 8));
+        assert_eq!(ap_expr.span, Span::new(0, 8));
 
         if let ExpressionData::Application(head, tail) = &ap_expr.content {
             assert_eq!(*head, head_id);
@@ -327,7 +315,7 @@ mod ast_tests {
     fn insert_application_with_wrong_args_nodeid() {
         let mut ast = AST::new();
         let expr = ExpressionData::Symbol("foo".to_string());
-        let head = ast.new_expression(span(0, 0), expr);
+        let head = ast.new_expression(Span::new(0, 0), expr);
         let result = ast.new_application(head, vec![NodeId(99)]);
         assert!(result.is_err());
     }
@@ -336,7 +324,7 @@ mod ast_tests {
     fn add_root_nodes() {
         let mut ast = AST::new();
         let expr = ExpressionData::Symbol("foo".to_string());
-        let head = ast.new_expression(span(0, 0), expr);
+        let head = ast.new_expression(Span::new(0, 0), expr);
         let ap = ast.new_application(head, vec![]).unwrap();
         let root_added = ast.add_root(ap);
         assert!(root_added.is_ok());
@@ -477,7 +465,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
                 if content.len() < 1 {
                     Err(ReplError::ParsingError(
                         format!("Empty function application {}", token.content),
-                        token.span,
+                        Position::from_span(&token.span),
                     ))
                 } else {
                     // since we know there's some content, we can
@@ -490,7 +478,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
             TokenData::ClosedParen => match depth {
                 0 => Err(ReplError::ParsingError(
                     format!("Unbalanced parentheses. Unexpected `)`",),
-                    token.span,
+                    Position::from_span(&token.span),
                 )),
                 _ => return Ok(forest), // hop out of the loop and return forest as is
             },
@@ -551,7 +539,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                 }
                 _ => Err(ReplError::EvaluationError(
                     format!("Invalid function head expression {}", evaluated_head,),
-                    head.span,
+                    Position::from_span(&head.span),
                 )),
             }
         }
@@ -638,23 +626,23 @@ mod tests {
             result,
             [
                 Token {
-                    span: Position::Span(0, 0),
+                    span: Span::new(0, 0),
                     content: TokenData::OpenParen
                 },
                 Token {
-                    span: Position::Span(1, 3),
+                    span: Span::new(1, 3),
                     content: TokenData::Symbol("foo".to_string())
                 },
                 Token {
-                    span: Position::Span(5, 7),
+                    span: Span::new(5, 7),
                     content: TokenData::Symbol("bar".to_string())
                 },
                 Token {
-                    span: Position::Span(9, 11),
+                    span: Span::new(9, 11),
                     content: TokenData::Number(123)
                 },
                 Token {
-                    span: Position::Span(12, 12),
+                    span: Span::new(12, 12),
                     content: TokenData::ClosedParen
                 },
             ]
