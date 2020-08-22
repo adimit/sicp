@@ -1,8 +1,8 @@
 use crate::errors::{Position, ReplError, ReplResult};
 use std::fmt;
 
-use crate::syntax::{build_ast, Expression, ExpressionData, AST};
-use crate::tokenisation::{Span, Token};
+use crate::syntax::{Expression, ExpressionData, AST};
+use crate::tokenisation::Span;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {
@@ -75,12 +75,8 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
     }
 }
 
-pub fn evaluate_tokens<'a>(tokens: Vec<Token>) -> ReplResult<EvaluationResult> {
-    let mut tit = tokens.iter();
-    let mut ast: AST = AST::new();
-
-    let forest = build_ast(&mut tit, &mut ast, 0)?;
-
+pub fn evaluate_ast(ast: &AST) -> ReplResult<EvaluationResult> {
+    let forest = ast.get_roots();
     let mut results = forest
         .iter()
         .map(|nodeid| {

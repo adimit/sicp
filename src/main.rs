@@ -1,6 +1,7 @@
 use sicp::{
     errors::{Position, ReplResult},
-    evaluate::{evaluate_tokens, Command, EvaluationResult},
+    evaluate::{evaluate_ast, Command, EvaluationResult},
+    syntax::parse_tokens,
     tokenisation::tokenise,
 };
 use std::io;
@@ -31,7 +32,8 @@ fn eval<'a>(input: Input) -> ReplResult<EvaluationResult> {
     match input {
         Input::Line(string) => {
             let tokens = tokenise(&string)?;
-            evaluate_tokens(tokens)
+            let ast = parse_tokens(tokens)?;
+            evaluate_ast(&ast)
         }
         Input::EOF => Ok(EvaluationResult::Command(Command::Quit)),
     }

@@ -113,11 +113,15 @@ impl AST {
         self.roots.push(id);
         Ok(())
     }
+
+    pub fn get_roots(&self) -> Vec<NodeId> {
+        self.roots.clone()
+    }
 }
 
 // Recursive ast building function. Each invocation covers one level
 // of depth, successive recurvise calls increase depth.
-pub fn build_ast<'a, I: Iterator<Item = &'a Token>>(
+fn build_ast<'a, I: Iterator<Item = &'a Token>>(
     tit: &mut I,
     ast: &mut AST,
     depth: usize,
@@ -165,7 +169,7 @@ pub fn build_ast<'a, I: Iterator<Item = &'a Token>>(
         let _units = forest
             .iter()
             .map(|node| ast.add_root(*node))
-            .collect::<Result<Vec<()>, ReplError>>();
+            .collect::<ReplResult<Vec<()>>>();
         Ok(forest)
     } else {
         Err(ReplError::ParsingError(
@@ -173,6 +177,14 @@ pub fn build_ast<'a, I: Iterator<Item = &'a Token>>(
             Position::Unknown,
         ))
     }
+}
+
+pub fn parse_tokens(tokens: Vec<Token>) -> ReplResult<AST> {
+    let mut tit = tokens.iter();
+    let mut ast: AST = AST::new();
+
+    build_ast(&mut tit, &mut ast, 0)?;
+    Ok(ast)
 }
 
 #[cfg(test)]
