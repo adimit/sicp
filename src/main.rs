@@ -21,19 +21,21 @@ impl Error for ReplError {}
 impl fmt::Display for ReplError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ReplError::IOError(e) => write!(f, "REPL IO error: {}", e),
+            ReplError::IOError(e) => write!(f, "REPL IO error: {}.", e),
             ReplError::TokenisationError(msg, span) => {
-                write!(f, "REPL tokenisation error: {} at {})", msg, span)
+                write!(f, "REPL tokenisation error: {} at {}.)", msg, span)
             }
             ReplError::ParsingError(msg, span) => {
-                write!(f, "RERPL parsing error: {} at {}", msg, span)
+                write!(f, "RERPL parsing error: {} at {}.", msg, span)
             }
             ReplError::EvaluationError(msg, span) => {
-                write!(f, "REPL evaluation error: {} at {}", msg, span)
+                write!(f, "REPL evaluation error: {} at {}.", msg, span)
             }
-            ReplError::InternalError(msg, span) => {
-                write!(f, "REPL internal error: {} at {}. This is a bug", msg, span)
-            }
+            ReplError::InternalError(msg, span) => write!(
+                f,
+                "REPL internal error: {} at {}. This is a bug!",
+                msg, span
+            ),
         }
     }
 }
