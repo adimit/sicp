@@ -66,8 +66,8 @@ enum Position {
     Unknown,
 }
 
-impl Position {
-    fn from_span(span: &Span) -> Position {
+impl From<Span> for Position {
+    fn from(span: Span) -> Self {
         Position::Span(span.begin, span.end)
     }
 }
@@ -465,7 +465,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
                 if content.len() < 1 {
                     Err(ReplError::ParsingError(
                         format!("Empty function application {}", token.content),
-                        Position::from_span(&token.span),
+                        Position::from(token.span),
                     ))
                 } else {
                     // since we know there's some content, we can
@@ -478,7 +478,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
             TokenData::ClosedParen => match depth {
                 0 => Err(ReplError::ParsingError(
                     format!("Unbalanced parentheses. Unexpected `)`",),
-                    Position::from_span(&token.span),
+                    Position::from(token.span),
                 )),
                 _ => return Ok(forest), // hop out of the loop and return forest as is
             },
@@ -539,7 +539,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                 }
                 _ => Err(ReplError::EvaluationError(
                     format!("Invalid function head expression {}", evaluated_head,),
-                    Position::from_span(&head.span),
+                    Position::from(head.span),
                 )),
             }
         }
