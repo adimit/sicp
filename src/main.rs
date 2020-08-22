@@ -214,18 +214,12 @@ impl AST {
     ) -> ReplResult<NodeId> {
         // check out that the given node ids exist
         // while checking the references, get the spans
-        let head_expr = self.get_node(head).ok_or(ReplError::ParsingError(
-            format!("Unknown node {}", head),
-            Position::Unknown,
-        ))?;
+        let head_expr = self.get_node_result(head)?;
         let tail = args.into_iter().collect::<Vec<NodeId>>();
         let mut max_span = head_expr.span.end;
         tail.iter()
             .map(|node| {
-                let expr = self.get_node(*node).ok_or(ReplError::ParsingError(
-                    format!("Unknown node {}", head_expr),
-                    Position::Unknown,
-                ))?;
+                let expr = self.get_node_result(*node)?;
                 max_span = std::cmp::max(max_span, expr.span.end);
                 Ok(expr)
             })
@@ -245,11 +239,15 @@ impl AST {
         self.nodes.get(n)
     }
 
-    fn add_root(&mut self, id: NodeId) -> ReplResult<()> {
-        self.get_node(id).ok_or(ReplError::ParsingError(
-            format!("Unknown node {}", id),
+    fn get_node_result(&self, id: NodeId) -> ReplResult<&Expression> {
+        self.get_node(id).ok_or(ReplError::InternalError(
+            format!("Unknown node id {}", id),
             Position::Unknown,
-        ))?;
+        ))
+    }
+
+    fn add_root(&mut self, id: NodeId) -> ReplResult<()> {
+        self.get_node_result(id)?;
         self.roots.push(id);
         Ok(())
     }
@@ -422,18 +420,12 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
         ExpressionData::Symbol(sym) => Ok(EvaluationResult::Symbol(sym.to_string())),
         ExpressionData::Int(int) => Ok(EvaluationResult::Int(*int)),
         ExpressionData::Application(nodeid, args) => {
-            let head = ast.get_node(*nodeid).ok_or(ReplError::EvaluationError(
-                format!("Unknown node id {}.", nodeid),
-                Position::Unknown,
-            ))?;
+            let head = ast.get_node_result(*nodeid)?;
             let evaluated_head = evaluate_expr(head, ast)?;
             let evaluated_args = args
                 .iter()
                 .map(|arg| {
-                    let arg_expr = ast.get_node(*arg).ok_or(ReplError::EvaluationError(
-                        format!("Unknown node id {}.", arg),
-                        Position::Unknown,
-                    ))?;
+                    let arg_expr = ast.get_node_result(*arg)?;
                     evaluate_expr(arg_expr, ast)
                 })
                 .collect::<ReplResult<Vec<EvaluationResult>>>()?;
@@ -469,17 +461,14 @@ fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError
 
     let mut results = forest
         .iter()
-        .map(|nodeid| match ast.get_node(*nodeid) {
-            Some(tree) => evaluate_expr(tree, &ast),
-            None => Err(ReplError::EvaluationError(
-                format!("Unkonwn node id {}.", *nodeid),
-                Position::Unknown,
-            )),
+        .map(|nodeid| {
+            let node = ast.get_node_result(*nodeid)?;
+            evaluate_expr(node, &ast)
         })
         .collect::<ReplResult<Vec<EvaluationResult>>>()?;
 
-    results.pop().ok_or(ReplError::EvaluationError(
-        "No results!".to_string(),
+    results.pop().ok_or(ReplError::InternalError(
+        String::from("No results to evaluate!"),
         Position::Unknown,
     ))
 }
