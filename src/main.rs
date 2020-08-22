@@ -576,12 +576,29 @@ mod tests {
 
     #[test]
     fn error_on_unknown_function() {
-        assert!(test_eval("(foo)").is_err())
+        let r = test_eval("(foo)");
+        assert!(r.is_err());
+        assert_eq!(r.unwrap_err().get_position().unwrap(), Position::Span(1, 3));
+    }
+
+    impl ReplError {
+        fn get_position(&self) -> Option<Position> {
+            match self {
+                ReplError::InternalError(_, pos) => Some(*pos),
+                ReplError::EvaluationError(_, pos) => Some(*pos),
+                ReplError::ParsingError(_, pos) => Some(*pos),
+                ReplError::TokenisationError(_, pos) => Some(*pos),
+                ReplError::IOError(_) => None,
+            }
+        }
     }
 
     #[test]
     fn error_on_wrong_type_argument_for_sum() {
-        assert!(test_eval("(+ foo)").is_err())
+        let r = test_eval("(+ foo)");
+        assert!(r.is_err());
+        let position = r.unwrap_err().get_position().unwrap();
+        assert_eq!(position, Position::Span(3, 5))
     }
 
     #[test]
