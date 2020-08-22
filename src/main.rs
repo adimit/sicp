@@ -10,9 +10,9 @@ use std::{
 #[derive(Debug)]
 enum ReplError {
     IOError(io::Error),
-    TokenisationError(String, Span),
-    ParsingError(String, Span),
-    EvaluationError(String, Span),
+    TokenisationError(String, Position),
+    ParsingError(String, Position),
+    EvaluationError(String, Position),
 }
 
 impl Error for ReplError {}
@@ -42,12 +42,12 @@ impl From<io::Error> for ReplError {
 }
 
 #[derive(Debug, Eq, Clone, Copy, PartialEq)]
-struct Span {
+struct Position {
     begin: usize,
     end: usize,
 }
 
-impl fmt::Display for Span {
+impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.begin == self.end {
             write!(f, "{}", self.begin)
@@ -60,7 +60,7 @@ impl fmt::Display for Span {
 #[derive(Debug, Eq, PartialEq)]
 struct Token {
     content: TokenData,
-    span: Span,
+    span: Position,
 }
 
 impl fmt::Display for Token {
@@ -87,7 +87,7 @@ impl fmt::Display for TokenData {
 impl Token {
     fn create(begin: usize, end: usize, content: TokenData) -> Self {
         Token {
-            span: Span { begin, end },
+            span: Position { begin, end },
             content,
         }
     }
@@ -148,7 +148,7 @@ impl fmt::Display for NodeId {
 
 #[derive(Debug, Eq, PartialEq)]
 struct Expression {
-    span: Span,
+    span: Position,
     id: NodeId,
     content: ExpressionData,
 }
@@ -176,7 +176,7 @@ impl AST {
         }
     }
 
-    fn new_expression(&mut self, span: Span, content: ExpressionData) -> NodeId {
+    fn new_expression(&mut self, span: Position, content: ExpressionData) -> NodeId {
         let id = NodeId(self.nodes.len());
         let expr = Expression { span, content, id };
         self.nodes.push(expr);
@@ -192,7 +192,7 @@ impl AST {
         // while checking the references, get the spans
         let head_expr = self.get_node(head).ok_or(ReplError::ParsingError(
             format!("Unknown node {}", head),
-            Span { begin: 0, end: 0 },
+            Position { begin: 0, end: 0 },
         ))?;
         let tail = args.into_iter().collect::<Vec<NodeId>>();
         let mut max_span = head_expr.span.end;
@@ -200,7 +200,7 @@ impl AST {
             .map(|node| {
                 let expr = self.get_node(*node).ok_or(ReplError::ParsingError(
                     format!("Unknown node {}", head_expr),
-                    Span { begin: 0, end: 0 },
+                    Position { begin: 0, end: 0 },
                 ))?;
                 max_span = std::cmp::max(max_span, expr.span.end);
                 Ok(expr)
@@ -208,7 +208,7 @@ impl AST {
             .collect::<Result<Vec<&Expression>, ReplError>>()?;
         let id = NodeId(self.nodes.len());
         let expr = Expression {
-            span: Span {
+            span: Position {
                 begin: head_expr.span.begin,
                 end: max_span,
             },
@@ -227,7 +227,7 @@ impl AST {
     fn add_root(&mut self, id: NodeId) -> ReplResult<()> {
         self.get_node(id).ok_or(ReplError::ParsingError(
             format!("Unknown node {}", id),
-            Span { begin: 0, end: 0 },
+            Position { begin: 0, end: 0 },
         ))?;
         self.roots.push(id);
         Ok(())
@@ -238,8 +238,8 @@ impl AST {
 mod ast_tests {
     use super::*;
 
-    fn span(begin: usize, end: usize) -> Span {
-        Span { begin, end }
+    fn span(begin: usize, end: usize) -> Position {
+        Position { begin, end }
     }
 
     #[test]
@@ -360,7 +360,7 @@ fn tokenise(string: &str) -> Result<Vec<Token>, ReplError> {
     match chars.peek() {
         Some((pos, c)) => Err(ReplError::TokenisationError(
             format!("Unrecognised input `{}`", c),
-            Span {
+            Position {
                 begin: *pos,
                 end: *pos,
             },
@@ -486,7 +486,7 @@ fn build_ast<'a, I: Iterator<Item = &'a Token>>(
     } else {
         Err(ReplError::ParsingError(
             format!("Expected {} closing parentheses at end of input.", depth),
-            Span { begin: 0, end: 0 },
+            Position { begin: 0, end: 0 },
         ))
     }
 }
@@ -498,7 +498,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
         ExpressionData::Application(nodeid, args) => {
             let head = ast.get_node(*nodeid).ok_or(ReplError::EvaluationError(
                 format!("Unknown node id {}.", nodeid),
-                Span { begin: 0, end: 0 },
+                Position { begin: 0, end: 0 },
             ))?;
             let evaluated_head = evaluate_expr(head, ast)?;
             let evaluated_args = args
@@ -506,7 +506,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                 .map(|arg| {
                     let arg_expr = ast.get_node(*arg).ok_or(ReplError::EvaluationError(
                         format!("Unknown node id {}.", arg),
-                        Span { begin: 0, end: 0 },
+                        Position { begin: 0, end: 0 },
                     ))?;
                     evaluate_expr(arg_expr, ast)
                 })
@@ -520,7 +520,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                             EvaluationResult::Int(number) => Ok(*number),
                             _ => Err(ReplError::EvaluationError(
                                 format!("Wrong type argument {}.", arg),
-                                Span { begin: 0, end: 0 },
+                                Position { begin: 0, end: 0 },
                             )),
                         })
                         .collect::<ReplResult<Vec<i64>>>()?;
@@ -547,14 +547,14 @@ fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError
             Some(tree) => evaluate_expr(tree, &ast),
             None => Err(ReplError::EvaluationError(
                 format!("Unkonwn node id {}.", *nodeid),
-                Span { begin: 0, end: 0 },
+                Position { begin: 0, end: 0 },
             )),
         })
         .collect::<ReplResult<Vec<EvaluationResult>>>()?;
 
     results.pop().ok_or(ReplError::EvaluationError(
         "No results!".to_string(),
-        Span { begin: 0, end: 0 },
+        Position { begin: 0, end: 0 },
     ))
 }
 
@@ -615,23 +615,23 @@ mod tests {
             result,
             [
                 Token {
-                    span: Span { begin: 0, end: 0 },
+                    span: Position { begin: 0, end: 0 },
                     content: TokenData::OpenParen
                 },
                 Token {
-                    span: Span { begin: 1, end: 3 },
+                    span: Position { begin: 1, end: 3 },
                     content: TokenData::Symbol("foo".to_string())
                 },
                 Token {
-                    span: Span { begin: 5, end: 7 },
+                    span: Position { begin: 5, end: 7 },
                     content: TokenData::Symbol("bar".to_string())
                 },
                 Token {
-                    span: Span { begin: 9, end: 11 },
+                    span: Position { begin: 9, end: 11 },
                     content: TokenData::Number(123)
                 },
                 Token {
-                    span: Span { begin: 12, end: 12 },
+                    span: Position { begin: 12, end: 12 },
                     content: TokenData::ClosedParen
                 },
             ]
