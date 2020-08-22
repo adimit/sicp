@@ -18,6 +18,18 @@ enum ReplError {
 
 impl Error for ReplError {}
 
+impl ReplError {
+    fn get_position(&self) -> Option<Position> {
+        match self {
+            ReplError::InternalError(_, pos) => Some(*pos),
+            ReplError::EvaluationError(_, pos) => Some(*pos),
+            ReplError::ParsingError(_, pos) => Some(*pos),
+            ReplError::TokenisationError(_, pos) => Some(*pos),
+            ReplError::IOError(_) => None,
+        }
+    }
+}
+
 impl fmt::Display for ReplError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -512,9 +524,16 @@ fn main() {
                     }
                 },
             },
-            Err(e) => {
-                println!("Encountered an error:\n{}", e);
-            }
+            Err(e) => match e.get_position() {
+                Some(Position::Span(begin, end)) => println!(
+                    "{}^{}\n{}",
+                    " ".repeat(3 + begin),
+                    "-".repeat(end - begin),
+                    e
+                ),
+                Some(Position::Point(point)) => println!("{}^\n{}", " ".repeat(3 + point), e),
+                _ => println!("Encountered an error:\n{}", e),
+            },
         }
     }
 }
@@ -579,18 +598,6 @@ mod tests {
         let r = test_eval("(foo)");
         assert!(r.is_err());
         assert_eq!(r.unwrap_err().get_position().unwrap(), Position::Span(1, 3));
-    }
-
-    impl ReplError {
-        fn get_position(&self) -> Option<Position> {
-            match self {
-                ReplError::InternalError(_, pos) => Some(*pos),
-                ReplError::EvaluationError(_, pos) => Some(*pos),
-                ReplError::ParsingError(_, pos) => Some(*pos),
-                ReplError::TokenisationError(_, pos) => Some(*pos),
-                ReplError::IOError(_) => None,
-            }
-        }
     }
 
     #[test]
