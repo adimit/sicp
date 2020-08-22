@@ -252,94 +252,6 @@ impl AST {
     }
 }
 
-#[cfg(test)]
-mod ast_tests {
-    use super::*;
-
-    #[test]
-    fn insert_an_expression() {
-        let mut ast = AST::new();
-        let expr = ExpressionData::Int(1);
-        let id = ast.new_expression(Span::new(0, 0), expr);
-        assert!(ast.get_node(id).is_some());
-    }
-
-    #[test]
-    fn insert_application_without_args() {
-        let mut ast = AST::new();
-        let expr = ExpressionData::Symbol("foo".to_string());
-        let id = ast.new_expression(Span::new(0, 1), expr);
-        let ap = ast.new_application(id, vec![]).unwrap();
-        let ap_expr = ast.get_node(ap).unwrap();
-        assert_eq!(ap_expr.span, Span::new(0, 1));
-
-        if let ExpressionData::Application(head, tail) = &ap_expr.content {
-            assert_eq!(*head, id);
-            assert_eq!(tail.len(), 0);
-        } else {
-            panic!("Wrong expression data");
-        }
-    }
-
-    #[test]
-    fn insert_application_with_args() {
-        let mut ast = AST::new();
-        let expr = ExpressionData::Symbol("foo".to_string());
-        let expr_1 = ExpressionData::Symbol("bar".to_string());
-        let expr_2 = ExpressionData::Symbol("baz".to_string());
-        let head_id = ast.new_expression(Span::new(0, 2), expr);
-        let args_1 = ast.new_expression(Span::new(3, 5), expr_1);
-        let args_2 = ast.new_expression(Span::new(6, 8), expr_2);
-
-        let ap = ast.new_application(head_id, vec![args_1, args_2]).unwrap();
-        let ap_expr = ast.get_node(ap).unwrap();
-
-        assert_eq!(ap_expr.span, Span::new(0, 8));
-
-        if let ExpressionData::Application(head, tail) = &ap_expr.content {
-            assert_eq!(*head, head_id);
-            assert_eq!(tail, &[args_1, args_2]);
-        } else {
-            panic!("Wrong expression data");
-        }
-    }
-
-    #[test]
-    fn insert_application_with_wrong_funhead_nodeid() {
-        let mut ast = AST::new();
-        let result = ast.new_application(NodeId(0), vec![]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn insert_application_with_wrong_args_nodeid() {
-        let mut ast = AST::new();
-        let expr = ExpressionData::Symbol("foo".to_string());
-        let head = ast.new_expression(Span::new(0, 0), expr);
-        let result = ast.new_application(head, vec![NodeId(99)]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn add_root_nodes() {
-        let mut ast = AST::new();
-        let expr = ExpressionData::Symbol("foo".to_string());
-        let head = ast.new_expression(Span::new(0, 0), expr);
-        let ap = ast.new_application(head, vec![]).unwrap();
-        let root_added = ast.add_root(ap);
-        assert!(root_added.is_ok());
-
-        assert_eq!(ast.roots, vec!(ap));
-    }
-
-    #[test]
-    fn add_root_nodes_with_wrong_node_id() {
-        let mut ast = AST::new();
-        let result = ast.add_root(NodeId(99));
-        assert!(result.is_err());
-    }
-}
-
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let content = &self.content;
@@ -678,5 +590,93 @@ mod tests {
     #[test]
     fn sum_of_no_numbers_is_zero() {
         assert_eq!(test_eval("(+)").unwrap(), EvaluationResult::Int(0));
+    }
+}
+
+#[cfg(test)]
+mod ast_tests {
+    use super::*;
+
+    #[test]
+    fn insert_an_expression() {
+        let mut ast = AST::new();
+        let expr = ExpressionData::Int(1);
+        let id = ast.new_expression(Span::new(0, 0), expr);
+        assert!(ast.get_node(id).is_some());
+    }
+
+    #[test]
+    fn insert_application_without_args() {
+        let mut ast = AST::new();
+        let expr = ExpressionData::Symbol("foo".to_string());
+        let id = ast.new_expression(Span::new(0, 1), expr);
+        let ap = ast.new_application(id, vec![]).unwrap();
+        let ap_expr = ast.get_node(ap).unwrap();
+        assert_eq!(ap_expr.span, Span::new(0, 1));
+
+        if let ExpressionData::Application(head, tail) = &ap_expr.content {
+            assert_eq!(*head, id);
+            assert_eq!(tail.len(), 0);
+        } else {
+            panic!("Wrong expression data");
+        }
+    }
+
+    #[test]
+    fn insert_application_with_args() {
+        let mut ast = AST::new();
+        let expr = ExpressionData::Symbol("foo".to_string());
+        let expr_1 = ExpressionData::Symbol("bar".to_string());
+        let expr_2 = ExpressionData::Symbol("baz".to_string());
+        let head_id = ast.new_expression(Span::new(0, 2), expr);
+        let args_1 = ast.new_expression(Span::new(3, 5), expr_1);
+        let args_2 = ast.new_expression(Span::new(6, 8), expr_2);
+
+        let ap = ast.new_application(head_id, vec![args_1, args_2]).unwrap();
+        let ap_expr = ast.get_node(ap).unwrap();
+
+        assert_eq!(ap_expr.span, Span::new(0, 8));
+
+        if let ExpressionData::Application(head, tail) = &ap_expr.content {
+            assert_eq!(*head, head_id);
+            assert_eq!(tail, &[args_1, args_2]);
+        } else {
+            panic!("Wrong expression data");
+        }
+    }
+
+    #[test]
+    fn insert_application_with_wrong_funhead_nodeid() {
+        let mut ast = AST::new();
+        let result = ast.new_application(NodeId(0), vec![]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn insert_application_with_wrong_args_nodeid() {
+        let mut ast = AST::new();
+        let expr = ExpressionData::Symbol("foo".to_string());
+        let head = ast.new_expression(Span::new(0, 0), expr);
+        let result = ast.new_application(head, vec![NodeId(99)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn add_root_nodes() {
+        let mut ast = AST::new();
+        let expr = ExpressionData::Symbol("foo".to_string());
+        let head = ast.new_expression(Span::new(0, 0), expr);
+        let ap = ast.new_application(head, vec![]).unwrap();
+        let root_added = ast.add_root(ap);
+        assert!(root_added.is_ok());
+
+        assert_eq!(ast.roots, vec!(ap));
+    }
+
+    #[test]
+    fn add_root_nodes_with_wrong_node_id() {
+        let mut ast = AST::new();
+        let result = ast.add_root(NodeId(99));
+        assert!(result.is_err());
     }
 }
