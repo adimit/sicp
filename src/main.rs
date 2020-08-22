@@ -1,5 +1,5 @@
 use sicp::{
-    errors::{Position, ReplError, ReplResult},
+    errors::{Position, ReplResult},
     evaluate::{evaluate_tokens, Command, EvaluationResult},
     tokenisation::tokenise,
 };
@@ -11,7 +11,7 @@ enum Input {
     EOF,
 }
 
-fn read() -> Result<Input, ReplError> {
+fn read() -> ReplResult<Input> {
     print!("λ> ");
     stdout().flush()?;
 
@@ -27,7 +27,7 @@ fn read() -> Result<Input, ReplError> {
     )))
 }
 
-fn eval<'a>(input: Input) -> Result<EvaluationResult, ReplError> {
+fn eval<'a>(input: Input) -> ReplResult<EvaluationResult> {
     match input {
         Input::Line(string) => {
             let tokens = tokenise(&string)?;
@@ -37,7 +37,7 @@ fn eval<'a>(input: Input) -> Result<EvaluationResult, ReplError> {
     }
 }
 
-fn repl<'a>() -> Result<EvaluationResult, ReplError> {
+fn repl<'a>() -> ReplResult<EvaluationResult> {
     let input = read()?;
     eval(input)
 }

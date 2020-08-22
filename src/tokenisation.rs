@@ -1,4 +1,4 @@
-use crate::errors::{Position, ReplError};
+use crate::errors::{Position, ReplError, ReplResult};
 use std::fmt;
 
 #[derive(Debug, Eq, Clone, Copy, PartialEq)]
@@ -67,7 +67,7 @@ pub enum TokenData {
 
 type Tape<'a> = std::iter::Peekable<std::iter::Enumerate<std::str::Chars<'a>>>;
 
-pub fn tokenise(string: &str) -> Result<Vec<Token>, ReplError> {
+pub fn tokenise(string: &str) -> ReplResult<Vec<Token>> {
     let mut chars = string.chars().enumerate().peekable();
     let mut tokens = Vec::new();
     while let Some(token) = parse_a_token(&mut chars) {

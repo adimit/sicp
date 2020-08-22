@@ -85,7 +85,7 @@ impl AST {
                 max_span = std::cmp::max(max_span, expr.span.end);
                 Ok(expr)
             })
-            .collect::<Result<Vec<&Expression>, ReplError>>()?;
+            .collect::<ReplResult<Vec<&Expression>>>()?;
         let id = NodeId(self.nodes.len());
         let expr = Expression {
             span: Span::new(head_expr.span.begin, max_span),
@@ -121,7 +121,7 @@ pub fn build_ast<'a, I: Iterator<Item = &'a Token>>(
     tit: &mut I,
     ast: &mut AST,
     depth: usize,
-) -> Result<Vec<NodeId>, ReplError> {
+) -> ReplResult<Vec<NodeId>> {
     let mut forest = Vec::new();
 
     while let Some(token) = tit.next() {

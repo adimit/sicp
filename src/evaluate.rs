@@ -75,7 +75,7 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
     }
 }
 
-pub fn evaluate_tokens<'a>(tokens: Vec<Token>) -> Result<EvaluationResult, ReplError> {
+pub fn evaluate_tokens<'a>(tokens: Vec<Token>) -> ReplResult<EvaluationResult> {
     let mut tit = tokens.iter();
     let mut ast: AST = AST::new();
 
