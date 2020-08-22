@@ -426,19 +426,22 @@ fn evaluate_expr<'a>(expr: &'a Expression, ast: &AST) -> ReplResult<EvaluationRe
                 .iter()
                 .map(|arg| {
                     let arg_expr = ast.get_node_result(*arg)?;
-                    evaluate_expr(arg_expr, ast)
+                    evaluate_expr(arg_expr, ast).map(|e| (e, arg_expr.span))
                 })
-                .collect::<ReplResult<Vec<EvaluationResult>>>()?;
+                .collect::<ReplResult<Vec<(EvaluationResult, Span)>>>()?;
 
-            match evaluated_head {
+            match &evaluated_head {
                 EvaluationResult::Symbol(sym) if sym == "+" => {
                     let numbers = evaluated_args
                         .iter()
                         .map(|arg| match arg {
-                            EvaluationResult::Int(number) => Ok(*number),
-                            _ => Err(ReplError::EvaluationError(
-                                format!("Wrong type argument {}.", arg),
-                                Position::Unknown,
+                            (EvaluationResult::Int(number), _) => Ok(*number),
+                            (evaluated_arg, span) => Err(ReplError::EvaluationError(
+                                format!(
+                                    "Wrong type argument {} for function head {}",
+                                    evaluated_arg, evaluated_head
+                                ),
+                                Position::from(*span),
                             )),
                         })
                         .collect::<ReplResult<Vec<i64>>>()?;
