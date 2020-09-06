@@ -61,7 +61,7 @@ impl Token {
 pub enum TokenData {
     OpenParen,
     ClosedParen,
-    Number(i64),
+    Number(i32),
     Symbol(String),
 }
 
@@ -117,7 +117,7 @@ fn parse_symbol(tape: &mut Tape) -> Option<Token> {
 
     if string.len() > 0 {
         let start: usize = lastpos - (string.len() - 1);
-        match string.parse::<i64>() {
+        match string.parse::<i32>() {
             Ok(num) => Some(Token::create(start, lastpos, TokenData::Number(num))),
             Err(_) => Some(Token::create(start, lastpos, TokenData::Symbol(string))),
         }

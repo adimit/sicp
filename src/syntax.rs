@@ -12,17 +12,18 @@ impl fmt::Display for NodeId {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Expression {
     pub span: Span,
     id: NodeId,
     content: ExpressionData,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 enum ExpressionData {
     Symbol(String),
-    Int(i64),
+    Int(i32),
+    Float(f64),
     Application(NodeId, Vec<NodeId>),
 }
 
@@ -43,6 +44,9 @@ impl fmt::Display for Expression {
                 }
                 write!(f, ")")?;
             }
+            ExpressionData::Float(float) => {
+                write!(f, "{}", float)?;
+            }
         }
         Ok(())
     }
@@ -57,7 +61,7 @@ pub struct AST {
 pub trait AstReducer {
     type Product;
 
-    fn reduce_int(&self, n: i64) -> ReplResult<Self::Product>;
+    fn reduce_int(&self, n: i32) -> ReplResult<Self::Product>;
 
     fn reduce_symbol(&self, sym: &str) -> ReplResult<Self::Product>;
 
@@ -105,6 +109,7 @@ impl AST {
 
                 reducer.reduce_application(head, args.iter().cloned())
             }
+            ExpressionData::Float(float) => todo!(),
         }
     }
 

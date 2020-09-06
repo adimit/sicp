@@ -52,8 +52,8 @@ fn main() {
                 EvaluationResult::Symbol(sym) => {
                     println!("{}", sym);
                 }
-                EvaluationResult::Int(int) => {
-                    println!("{}", int);
+                EvaluationResult::Number(num) => {
+                    println!("{}", num);
                 }
                 EvaluationResult::Command(c) => match c {
                     Command::Quit => {
@@ -79,10 +79,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sicp::evaluate::Number;
 
     #[test]
     fn evaluates_primitive_expressions() {
-        assert_eq!(test_eval("123").unwrap(), EvaluationResult::Int(123));
+        assert_eq!(
+            test_eval("123").unwrap(),
+            EvaluationResult::Number(Number::Int(123))
+        );
     }
     fn test_eval(input: &str) -> ReplResult<EvaluationResult> {
         eval(Input::Line(input.to_string()))
@@ -90,14 +94,17 @@ mod tests {
 
     #[test]
     fn evaluates_addition_expression() {
-        assert_eq!(test_eval("(+ 1 2)").unwrap(), EvaluationResult::Int(3));
+        assert_eq!(
+            test_eval("(+ 1 2)").unwrap(),
+            EvaluationResult::Number(Number::Int(3))
+        );
     }
 
     #[test]
     fn evaluates_nested_addition_expression() {
         assert_eq!(
             test_eval("(+ 1 (+ 2 3) 4 5)").unwrap(),
-            EvaluationResult::Int(15)
+            EvaluationResult::Number(Number::Int(15))
         );
     }
 
@@ -118,6 +125,17 @@ mod tests {
 
     #[test]
     fn sum_of_no_numbers_is_zero() {
-        assert_eq!(test_eval("(+)").unwrap(), EvaluationResult::Int(0));
+        assert_eq!(
+            test_eval("(+)").unwrap(),
+            EvaluationResult::Number(Number::Int(0))
+        );
+    }
+
+    #[test]
+    fn sum_of_float_and_int_is_float() {
+        assert_eq!(
+            test_eval("(+ 1 1.0)").unwrap(),
+            EvaluationResult::Number(Number::Float(2.0))
+        )
     }
 }

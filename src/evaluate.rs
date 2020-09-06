@@ -16,10 +16,52 @@ impl fmt::Display for Command {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Number {
+    Int(i32),
+    Float(f64),
+}
+
+impl From<i32> for Number {
+    fn from(i: i32) -> Self {
+        Number::Int(i)
+    }
+}
+
+impl From<f64> for Number {
+    fn from(f: f64) -> Self {
+        Number::Float(f)
+    }
+}
+
+impl std::iter::Sum for Number {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Number::Int(0), |acc, num| match num {
+            Number::Int(int_num) => match acc {
+                Number::Int(int_acc) => Number::Int(int_acc + int_num),
+                Number::Float(float_acc) => Number::Float(float_acc + f64::from(int_num)),
+            },
+            Number::Float(float_num) => match acc {
+                Number::Int(int_acc) => Number::Float(f64::from(int_acc) + float_num),
+                Number::Float(float_acc) => Number::Float(float_acc + float_num),
+            },
+        })
+    }
+}
+
+impl fmt::Display for Number {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Number::Int(int) => write!(fmt, "Int({})", int),
+            Number::Float(float) => write!(fmt, "Float({})", float),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum EvaluationResult {
     Symbol(String),
-    Int(i64),
+    Number(Number),
     Command(Command),
 }
 
@@ -36,8 +78,8 @@ impl EvaluationReducer<'_> {
 impl AstReducer for EvaluationReducer<'_> {
     type Product = EvaluationResult;
 
-    fn reduce_int(&self, n: i64) -> ReplResult<Self::Product> {
-        Ok(EvaluationResult::Int(n))
+    fn reduce_int(&self, n: i32) -> ReplResult<Self::Product> {
+        Ok(EvaluationResult::Number(Number::Int(n)))
     }
 
     fn reduce_symbol(&self, sym: &str) -> ReplResult<Self::Product> {
@@ -56,15 +98,15 @@ impl AstReducer for EvaluationReducer<'_> {
                     .map(|arg| {
                         let eval = self.ast.reduce_expr(arg, self)?;
                         match eval {
-                            EvaluationResult::Int(num) => Ok(num),
+                            EvaluationResult::Number(num) => Ok(num),
                             _ => Err(ReplError::EvaluationError(
                                 format!("Wrong type argument {}", eval),
                                 arg.span.into(),
                             )),
                         }
                     })
-                    .collect::<ReplResult<Vec<i64>>>()?;
-                Ok(EvaluationResult::Int(funargs.iter().sum()))
+                    .collect::<ReplResult<Vec<Number>>>()?;
+                Ok(EvaluationResult::Number(funargs.iter().cloned().sum()))
             }
             EvaluationResult::Symbol(_) => Err(ReplError::EvaluationError(
                 format!("Unknown function {}", funhead),
@@ -82,7 +124,7 @@ impl fmt::Display for EvaluationResult {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
             EvaluationResult::Symbol(sym) => write!(fmt, "Sym({})", sym),
-            EvaluationResult::Int(int) => write!(fmt, "Int({})", int),
+            EvaluationResult::Number(num) => write!(fmt, "Int({})", num),
             EvaluationResult::Command(cmd) => write!(fmt, "Cmd({})", cmd),
         }
     }
