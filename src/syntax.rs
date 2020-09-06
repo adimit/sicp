@@ -3,7 +3,7 @@ use crate::tokenisation::{Span, Token, TokenData};
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub struct NodeId(usize);
+struct NodeId(usize);
 
 impl fmt::Display for NodeId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -15,12 +15,12 @@ impl fmt::Display for NodeId {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Expression {
     pub span: Span,
-    pub id: NodeId,
-    pub content: ExpressionData,
+    id: NodeId,
+    content: ExpressionData,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum ExpressionData {
+enum ExpressionData {
     Symbol(String),
     Int(i64),
     Application(NodeId, Vec<NodeId>),
@@ -54,11 +54,57 @@ pub struct AST {
     roots: Vec<NodeId>,
 }
 
+pub trait AstReducer {
+    type Product;
+
+    fn reduce_int(&self, n: i64) -> ReplResult<Self::Product>;
+
+    fn reduce_symbol(&self, sym: &str) -> ReplResult<Self::Product>;
+
+    fn reduce_application<'a>(
+        &self,
+        head: &Expression,
+        args: impl Iterator<Item = &'a Expression>,
+    ) -> ReplResult<Self::Product>;
+}
+
 impl AST {
-    pub fn new() -> Self {
+    fn new() -> Self {
         AST {
             nodes: Vec::new(),
             roots: Vec::new(),
+        }
+    }
+
+    pub fn reduce<P>(&self, reducer: &impl AstReducer<Product = P>) -> ReplResult<Vec<P>> {
+        let roots = self
+            .get_roots()
+            .iter()
+            .map(|nodeid| self.get_node_result(*nodeid))
+            .collect::<ReplResult<Vec<&Expression>>>()?;
+        roots
+            .iter()
+            .map(|expr| self.reduce_expr(expr, reducer))
+            .collect()
+    }
+
+    pub fn reduce_expr<P>(
+        &self,
+        expr: &Expression,
+        reducer: &impl AstReducer<Product = P>,
+    ) -> ReplResult<P> {
+        match &expr.content {
+            ExpressionData::Symbol(sym) => reducer.reduce_symbol(sym),
+            ExpressionData::Int(num) => reducer.reduce_int(*num),
+            ExpressionData::Application(head_id, tail_ids) => {
+                let head = self.get_node_result(*head_id)?;
+                let args = tail_ids
+                    .iter()
+                    .map(|node_id| self.get_node_result(*node_id))
+                    .collect::<ReplResult<Vec<&Expression>>>()?;
+
+                reducer.reduce_application(head, args.iter().cloned())
+            }
         }
     }
 
@@ -69,10 +115,10 @@ impl AST {
         id
     }
 
-    fn new_application<I: IntoIterator<Item = NodeId>>(
+    fn new_application(
         &mut self,
         head: NodeId,
-        args: I,
+        args: impl IntoIterator<Item = NodeId>,
     ) -> ReplResult<NodeId> {
         // check out that the given node ids exist
         // while checking the references, get the spans
@@ -101,7 +147,7 @@ impl AST {
         self.nodes.get(n)
     }
 
-    pub fn get_node_result(&self, id: NodeId) -> ReplResult<&Expression> {
+    fn get_node_result(&self, id: NodeId) -> ReplResult<&Expression> {
         self.get_node(id).ok_or(ReplError::InternalError(
             format!("Unknown node id {}", id),
             Position::Unknown,
@@ -114,7 +160,7 @@ impl AST {
         Ok(())
     }
 
-    pub fn get_roots(&self) -> Vec<NodeId> {
+    fn get_roots(&self) -> Vec<NodeId> {
         self.roots.clone()
     }
 }

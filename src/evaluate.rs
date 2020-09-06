@@ -1,8 +1,7 @@
 use crate::errors::{Position, ReplError, ReplResult};
 use std::fmt;
 
-use crate::syntax::{Expression, ExpressionData, AST};
-use crate::tokenisation::Span;
+use crate::syntax::{AstReducer, Expression, AST};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {
@@ -24,6 +23,57 @@ pub enum EvaluationResult {
     Command(Command),
 }
 
+struct EvaluationReducer<'a> {
+    ast: &'a AST,
+}
+
+impl EvaluationReducer<'_> {
+    fn new(ast: &AST) -> EvaluationReducer {
+        EvaluationReducer { ast }
+    }
+}
+
+impl AstReducer for EvaluationReducer<'_> {
+    type Product = EvaluationResult;
+
+    fn reduce_int(&self, n: i64) -> ReplResult<Self::Product> {
+        Ok(EvaluationResult::Int(n))
+    }
+
+    fn reduce_symbol(&self, sym: &str) -> ReplResult<Self::Product> {
+        Ok(EvaluationResult::Symbol(sym.into()))
+    }
+
+    fn reduce_application<'a>(
+        &self,
+        head: &Expression,
+        args: impl Iterator<Item = &'a Expression>,
+    ) -> ReplResult<Self::Product> {
+        let funhead = self.ast.reduce_expr(head, self)?;
+        match funhead {
+            EvaluationResult::Symbol(sym) if sym == "+" => {
+                let funargs = args
+                    .map(|arg| {
+                        let eval = self.ast.reduce_expr(arg, self)?;
+                        match eval {
+                            EvaluationResult::Int(num) => Ok(num),
+                            _ => Err(ReplError::EvaluationError(
+                                format!("Wrong type argument {}", eval),
+                                arg.span.into(),
+                            )),
+                        }
+                    })
+                    .collect::<ReplResult<Vec<i64>>>()?;
+                Ok(EvaluationResult::Int(funargs.iter().sum()))
+            }
+            _ => Err(ReplError::EvaluationError(
+                "Invalid function head {}".into(),
+                head.span.into(),
+            )),
+        }
+    }
+}
+
 impl fmt::Display for EvaluationResult {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -34,56 +84,9 @@ impl fmt::Display for EvaluationResult {
     }
 }
 
-fn evaluate_expr(expr: &Expression, ast: &AST) -> ReplResult<EvaluationResult> {
-    match &expr.content {
-        ExpressionData::Symbol(sym) => Ok(EvaluationResult::Symbol(sym.to_string())),
-        ExpressionData::Int(int) => Ok(EvaluationResult::Int(*int)),
-        ExpressionData::Application(nodeid, args) => {
-            let head = ast.get_node_result(*nodeid)?;
-            let evaluated_head = evaluate_expr(head, ast)?;
-            let evaluated_args = args
-                .iter()
-                .map(|arg| {
-                    let arg_expr = ast.get_node_result(*arg)?;
-                    evaluate_expr(arg_expr, ast).map(|e| (e, arg_expr.span))
-                })
-                .collect::<ReplResult<Vec<(EvaluationResult, Span)>>>()?;
-
-            match &evaluated_head {
-                EvaluationResult::Symbol(sym) if sym == "+" => {
-                    let numbers = evaluated_args
-                        .iter()
-                        .map(|arg| match arg {
-                            (EvaluationResult::Int(number), _) => Ok(*number),
-                            (evaluated_arg, span) => Err(ReplError::EvaluationError(
-                                format!(
-                                    "Wrong type argument {} for function head {}",
-                                    evaluated_arg, evaluated_head
-                                ),
-                                Position::from(*span),
-                            )),
-                        })
-                        .collect::<ReplResult<Vec<i64>>>()?;
-                    Ok(EvaluationResult::Int(numbers.iter().sum()))
-                }
-                _ => Err(ReplError::EvaluationError(
-                    format!("Invalid function head expression {}", evaluated_head,),
-                    Position::from(head.span),
-                )),
-            }
-        }
-    }
-}
-
 pub fn evaluate_ast(ast: &AST) -> ReplResult<EvaluationResult> {
-    let forest = ast.get_roots();
-    let mut results = forest
-        .iter()
-        .map(|nodeid| {
-            let node = ast.get_node_result(*nodeid)?;
-            evaluate_expr(node, &ast)
-        })
-        .collect::<ReplResult<Vec<EvaluationResult>>>()?;
+    let reducer = EvaluationReducer::new(ast);
+    let mut results = ast.reduce(&reducer)?;
 
     results.pop().ok_or(ReplError::InternalError(
         String::from("No results to evaluate!"),
