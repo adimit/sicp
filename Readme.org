@@ -14,3 +14,7 @@ Any error about evaluation or parsing should always carry positional information
 CAVEAT: our behaviour mirrors that of Scheme's reference interpreter exactly, so I don't know that it's a bug at all.
 
 Ignore this for now.
+** TODO Add other basic arithmetic operations
+subtraction, division multiplication
+** TODO Add floating point numbers
+floating point numbers "pollute" i.e. if there's one floating point number anywhere in the expression, the result is fp, otherwise int.
