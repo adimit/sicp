@@ -66,8 +66,12 @@ impl AstReducer for EvaluationReducer<'_> {
                     .collect::<ReplResult<Vec<i64>>>()?;
                 Ok(EvaluationResult::Int(funargs.iter().sum()))
             }
+            EvaluationResult::Symbol(_) => Err(ReplError::EvaluationError(
+                format!("Unknown function {}", funhead),
+                head.span.into(),
+            )),
             _ => Err(ReplError::EvaluationError(
-                "Invalid function head {}".into(),
+                format!("Invalid function head {}", funhead),
                 head.span.into(),
             )),
         }
