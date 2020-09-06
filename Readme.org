@@ -7,8 +7,10 @@ This is an experimental Scheme in Rust. It serves as an accompaniment to reading
 Error reporting could be improved by adding spans to =EvaluationResult=
 ** DONE Test for error messages reporting locations
 Any error about evaluation or parsing should always carry positional information. Refactor ReplError to carry a span and implement =fmt::Display=
-** TODO Refactor
-** TODO (+12) should not give invalid function head expression Int(12)
+** DONE Refactor
+** DONE (+12) should not give invalid function head expression Int(12)
 
 =+12= should be parsed as a symbol. It's also weird that =+12= doesn't just work now, because shouldn't it be a =Sym(+)= followed by =Int(12)=?
 CAVEAT: our behaviour mirrors that of Scheme's reference interpreter exactly, so I don't know that it's a bug at all.
+
+Ignore this for now.
