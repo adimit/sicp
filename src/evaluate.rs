@@ -16,7 +16,7 @@ impl fmt::Display for Command {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum EvaluationResult {
     Symbol(String),
     Int(i64),
