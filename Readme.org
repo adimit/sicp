@@ -18,3 +18,6 @@ Ignore this for now.
 subtraction, division multiplication
 ** TODO Add floating point numbers
 floating point numbers "pollute" i.e. if there's one floating point number anywhere in the expression, the result is fp, otherwise int.
+** TODO Evaluate =thiserr= and =eyre=
+Created: [2020-08-26 Wed 17:58]
+Ref: main.org [[file:~/org/main.org::*RustConf talks][RustConf talks]]
